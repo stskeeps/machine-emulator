@@ -1,4 +1,4 @@
-TOOLCHAIN_PREFIX ?= riscv64-cartesi-linux-gnu-
+TOOLCHAIN_PREFIX ?= riscv32-unknown-elf-
 
 EMULATOR_SRC_DIR = ../src
 MACHINE_EMULATOR_DEFINES_DIR := ../lib/machine-emulator-defines
@@ -39,7 +39,7 @@ endif
 # Flags to minimize undefined behavior
 UBFLAGS := -fno-strict-aliasing -fno-strict-overflow -fno-delete-null-pointer-checks
 
-CFLAGS := -march=rv64i -mabi=lp64 -Wl,--gc-sections $(OPTFLAGS) $(UBFLAGS) \
+CFLAGS := -march=rv32im -mabi=ilp32 -Wl,--gc-sections $(OPTFLAGS) $(UBFLAGS) \
 	-DMICROARCHITECTURE=1 \
 	-DAVOID_NATIVE_UINT128_T=1 \
 	-ffreestanding \
@@ -76,16 +76,7 @@ TARGETS=$(UARCH_OBJS) $(EMULATOR_OBJS)
 
 .PHONY: all clean
 
-all: $(TARGETS) uarch-ram.bin
-
-uarch-ram.bin: uarch-ram.elf
-	$(OBJCOPY) -S -O binary  $^ $@
-
-uarch-ram.elf: $(EMULATOR_OBJS) $(UARCH_OBJS) uarch-ram-entry.o uarch-ram.ld
-	$(CXX) $(CFLAGS) $(CXXFLAGS) -Wl,-Tuarch-ram.ld  -o $@  $(EMULATOR_OBJS) $(UARCH_OBJS) uarch-ram-entry.o  -lgcc
-
-uarch-ram-entry.o: uarch-ram-entry.S
-	$(CC) $(CFLAGS) -c -o $@ $(<F)
+all: $(TARGETS) uarch_combined.o
 
 %.emulator_cpp.o: $(EMULATOR_SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(CFLAGS) -c -o $@ $(EMULATOR_SRC_DIR)/$(<F)
@@ -96,9 +87,8 @@ uarch-ram-entry.o: uarch-ram-entry.S
 %.uarch_cpp.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(CFLAGS) -c -o $@ $(<F)
 
-%.ld: %.ld.in
-	$(CC) -o $(@F).tmp -x c $(CFLAGS) -E $(^F)
-	grep -v '^#' $@.tmp > $@
+uarch_combined.o: $(EMULATOR_OBJS) $(UARCH_OBJS)
+	$(LD) -relocatable $(EMULATOR_OBJS) $(UARCH_OBJS) -o uarch_combined.o
 
 clean:
-	rm -f *.ld *.elf *.bin *.tmp link.ld *.o
+	rm -f *.ld *.elf *.bin *.tmp link.ld *.o *.a

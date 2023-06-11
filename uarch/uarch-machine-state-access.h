@@ -17,7 +17,9 @@
 
 #ifndef uarch_machine_state_access_H
 #define uarch_machine_state_access_H
-
+#include <sys/types.h>
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #include "uarch-runtime.h" // must be included first, because of assert
 
 #include "clint.h"
@@ -37,12 +39,14 @@ namespace cartesi {
 
 template <typename T>
 static T raw_read_memory(uint64_t paddr) {
+    printf("read phys mem: %llx\n", paddr);
     volatile T *p = reinterpret_cast<T *>(paddr);
     return *p;
 }
 
 template <typename T>
 static void raw_write_memory(uint64_t paddr, T val) {
+    printf("write phys mem: %llx\n", paddr);
     volatile T *p = reinterpret_cast<T *>(paddr);
     *p = val;
 }

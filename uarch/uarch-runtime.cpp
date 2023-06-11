@@ -26,7 +26,7 @@ extern "C" void __cxa_pure_virtual() {
 }
 
 void operator delete(void *, unsigned long) {}
-
+void operator delete(void*, unsigned int) {}
 extern "C" void __assert_func(const char *file, int line, const char *, const char *e) {}
 
 extern "C" void __assert_fail(const char *__assertion, const char *__file, unsigned int __line,
@@ -48,6 +48,7 @@ extern "C" void *memmove(void *dest, const void *src, size_t n) {
     return dest;
 }
 
+#if 0
 extern "C" void *memcpy(void *dest, const void *src, size_t n) {
     auto s = reinterpret_cast<const unsigned char *>(src);
     auto d = reinterpret_cast<unsigned char *>(dest);
@@ -64,20 +65,26 @@ extern "C" void *memset(void *ptr, int value, size_t num) {
     }
     return ptr;
 }
+#endif
 
-extern "C" void _putchar(char c) {
-    volatile uint64_t *p = reinterpret_cast<uint64_t *>(cartesi::uarch_mmio_address::putchar);
-    *p = c;
-}
+extern "C" int __ucmpdi2 (long long x, long long y) { return x < y ? 0 : x == y ? 1 : 2; }
 
-extern "C" [[noreturn]] void abort(void) {
-    volatile char *p = reinterpret_cast<char *>(cartesi::uarch_mmio_address::abort);
-    *p = uarch_mmio_abort_value;
-    // execution will never reach this point
-    // infinite loop added to silence the compiler
-    for (;;) {
+extern "C" int __clzsi2 (int val);
+extern "C" int __clzdi2 (long long val)
+{
+  if (val >> 32)
+    {
+      return __clzsi2 (val >> 32);
+    }
+  else
+    {
+      return __clzsi2 (val) + 32;
     }
 }
+
+
+extern "C" void _putchar(char character);
+extern "C" [[noreturn]] void abort(void);
 
 namespace cartesi {
 
