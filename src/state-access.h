@@ -22,7 +22,6 @@
 
 #include <cassert>
 #include <sys/time.h>
-
 #include "device-state-access.h"
 #include "i-state-access.h"
 #include "machine.h"

@@ -37,25 +37,19 @@
 
 namespace cartesi {
 
-extern "C" uint64_t read_zphys_ram(uint64_t paddr);
-extern "C" void write_zphys_ram(uint64_t paddr, uint64_t val);
-extern "C" uint64_t page_in(uint64_t paddr);
+extern "C" uintptr_t page_in(uint64_t);
 
 template <typename T>
 static T raw_read_memory(uint64_t paddr) {
-    return static_cast<T>(read_zphys_ram(paddr));
+    volatile T *p = reinterpret_cast<T *>(paddr);
+    return *p;
 }
 
 template <typename T>
 static void raw_write_memory(uint64_t paddr, T val) {
-    write_zphys_ram(paddr, val);
+    volatile T *p = reinterpret_cast<T *>(paddr);
+    *p = val;
 }
-
-template <typename T>
-static void shadow_pma_write_memory(uint64_t rel, T val) {
-    
-}
-
 
 class uarch_pma_entry final {
 public:
@@ -155,9 +149,13 @@ public:
 // Provides access to the state of the big emulator from microcode
 class uarch_machine_state_access : public i_state_access<uarch_machine_state_access, uarch_pma_entry> {
     std::array<std::optional<uarch_pma_entry>, PMA_MAX> m_pmas;
-
+    uintptr_t m_shadow_state;
+    uintptr_t m_shadow_pmas;
 public:
-    uarch_machine_state_access() {}
+    uarch_machine_state_access(uintptr_t shadow_state, uintptr_t shadow_pmas) {
+        m_shadow_state = shadow_state;
+        m_shadow_pmas = shadow_pmas;
+    }
     uarch_machine_state_access(const uarch_machine_state_access &) = delete;
     uarch_machine_state_access(uarch_machine_state_access &&) = delete;
     uarch_machine_state_access &operator=(const uarch_machine_state_access &) = delete;
@@ -178,247 +176,247 @@ private:
     }
 
     uint64_t do_read_x(int reg) {
-        return raw_read_memory<uint64_t>(shadow_state_get_x_abs_addr(reg));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_x_rel_addr(reg));
     }
 
     void do_write_x(int reg, uint64_t val) {
-        raw_write_memory(shadow_state_get_x_abs_addr(reg), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_x_rel_addr(reg), val);
     }
 
     uint64_t do_read_f(int reg) {
-        return raw_read_memory<uint64_t>(shadow_state_get_f_abs_addr(reg));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_f_rel_addr(reg));
     }
 
     void do_write_f(int reg, uint64_t val) {
-        raw_write_memory(shadow_state_get_f_abs_addr(reg), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_f_rel_addr(reg), val);
     }
 
     uint64_t do_read_pc(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::pc));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::pc));
     }
 
     void do_write_pc(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::pc), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::pc), val);
     }
 
     uint64_t do_read_fcsr(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::fcsr));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::fcsr));
     }
 
     void do_write_fcsr(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::fcsr), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::fcsr), val);
     }
 
     uint64_t do_read_icycleinstret(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::icycleinstret));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::icycleinstret));
     }
 
     void do_write_icycleinstret(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::icycleinstret), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::icycleinstret), val);
     }
 
     uint64_t do_read_mvendorid(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mvendorid));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mvendorid));
     }
 
     uint64_t do_read_marchid(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::marchid));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::marchid));
     }
 
     uint64_t do_read_mimpid(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mimpid));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mimpid));
     }
 
     uint64_t do_read_mcycle(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mcycle));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mcycle));
     }
 
     void do_write_mcycle(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mcycle), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mcycle), val);
     }
 
     uint64_t do_read_mstatus(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mstatus));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mstatus));
     }
 
     void do_write_mstatus(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mstatus), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mstatus), val);
     }
 
     uint64_t do_read_mtvec(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mtvec));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mtvec));
     }
 
     void do_write_mtvec(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mtvec), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mtvec), val);
     }
 
     uint64_t do_read_mscratch(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mscratch));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mscratch));
     }
 
     void do_write_mscratch(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mscratch), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mscratch), val);
     }
 
     uint64_t do_read_mepc(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mepc));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mepc));
     }
 
     void do_write_mepc(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mepc), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mepc), val);
     }
 
     uint64_t do_read_mcause(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mcause));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mcause));
     }
 
     void do_write_mcause(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mcause), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mcause), val);
     }
 
     uint64_t do_read_mtval(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mtval));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mtval));
     }
 
     void do_write_mtval(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mtval), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mtval), val);
     }
 
     uint64_t do_read_misa(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::misa));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::misa));
     }
 
     void do_write_misa(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::misa), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::misa), val);
     }
 
     uint64_t do_read_mie(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mie));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mie));
     }
 
     void do_write_mie(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mie), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mie), val);
     }
 
     uint64_t do_read_mip(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mip));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mip));
     }
 
     void do_write_mip(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mip), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mip), val);
     }
 
     uint64_t do_read_medeleg(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::medeleg));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::medeleg));
     }
 
     void do_write_medeleg(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::medeleg), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::medeleg), val);
     }
 
     uint64_t do_read_mideleg(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mideleg));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mideleg));
     }
 
     void do_write_mideleg(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mideleg), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mideleg), val);
     }
 
     uint64_t do_read_mcounteren(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::mcounteren));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mcounteren));
     }
 
     void do_write_mcounteren(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::mcounteren), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::mcounteren), val);
     }
 
     uint64_t do_read_senvcfg(void) const {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::senvcfg));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::senvcfg));
     }
 
     void do_write_senvcfg(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::senvcfg), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::senvcfg), val);
     }
 
     uint64_t do_read_menvcfg(void) const {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::menvcfg));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::menvcfg));
     }
 
     void do_write_menvcfg(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::menvcfg), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::menvcfg), val);
     }
 
     uint64_t do_read_stvec(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::stvec));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::stvec));
     }
 
     void do_write_stvec(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::stvec), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::stvec), val);
     }
 
     uint64_t do_read_sscratch(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::sscratch));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::sscratch));
     }
 
     void do_write_sscratch(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::sscratch), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::sscratch), val);
     }
 
     uint64_t do_read_sepc(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::sepc));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::sepc));
     }
 
     void do_write_sepc(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::sepc), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::sepc), val);
     }
 
     uint64_t do_read_scause(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::scause));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::scause));
     }
 
     void do_write_scause(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::scause), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::scause), val);
     }
 
     uint64_t do_read_stval(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::stval));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::stval));
     }
 
     void do_write_stval(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::stval), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::stval), val);
     }
 
     uint64_t do_read_satp(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::satp));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::satp));
     }
 
     void do_write_satp(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::satp), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::satp), val);
     }
 
     uint64_t do_read_scounteren(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::scounteren));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::scounteren));
     }
 
     void do_write_scounteren(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::scounteren), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::scounteren), val);
     }
 
     uint64_t do_read_ilrsc(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::ilrsc));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::ilrsc));
     }
 
     void do_write_ilrsc(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::ilrsc), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::ilrsc), val);
     }
 
     uint64_t do_read_iflags(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::iflags));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::iflags));
     }
 
     void do_write_iflags(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::iflags), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::iflags), val);
     }
 
     void do_set_iflags_H(void) {
@@ -479,40 +477,40 @@ private:
     }
 
     uint64_t do_read_clint_mtimecmp(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::clint_mtimecmp));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::clint_mtimecmp));
         
     }
 
     void do_write_clint_mtimecmp(uint64_t val) {
-        raw_write_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::clint_mtimecmp), val);
+        raw_write_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::clint_mtimecmp), val);
     }
 
     uint64_t do_read_htif_fromhost(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::htif_fromhost));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::htif_fromhost));
     }
 
     void do_write_htif_fromhost(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::htif_fromhost), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::htif_fromhost), val);
     }
 
     uint64_t do_read_htif_tohost(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::htif_tohost));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::htif_tohost));
     }
 
     void do_write_htif_tohost(uint64_t val) {
-        raw_write_memory(shadow_state_get_csr_abs_addr(shadow_state_csr::htif_tohost), val);
+        raw_write_memory(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::htif_tohost), val);
     }
 
     uint64_t do_read_htif_ihalt(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::htif_ihalt));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::htif_ihalt));
     }
 
     uint64_t do_read_htif_iconsole(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::htif_iconsole));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::htif_iconsole));
     }
 
     uint64_t do_read_htif_iyield(void) {
-        return raw_read_memory<uint64_t>(shadow_state_get_csr_abs_addr(shadow_state_csr::htif_iyield));
+        return raw_read_memory<uint64_t>(m_shadow_state + shadow_state_get_csr_rel_addr(shadow_state_csr::htif_iyield));
     }
 
     uint64_t do_poll_console(uint64_t mcycle) {
@@ -520,11 +518,11 @@ private:
     }
     
     uint64_t do_read_pma_istart(int i) {
-        return raw_read_memory<uint64_t>(shadow_pmas_get_pma_abs_addr(i));
+        return raw_read_memory<uint64_t>(m_shadow_pmas + shadow_pmas_get_pma_rel_addr(i));
     }
 
     uint64_t do_read_pma_ilength(int i) {
-        return raw_read_memory<uint64_t>(shadow_pmas_get_pma_abs_addr(i) + sizeof(uint64_t));
+        return raw_read_memory<uint64_t>(m_shadow_pmas + shadow_pmas_get_pma_rel_addr(i) + sizeof(uint64_t));
     }
 
     template <typename T>

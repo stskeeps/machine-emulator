@@ -5409,6 +5409,7 @@ static FORCE_INLINE fetch_status fetch_translate_pc_slow(STATE_ACCESS &a, uint64
     uint64_t paddr{};
     // Walk page table and obtain the physical address
     if (unlikely(!translate_virtual_address(a, &paddr, vaddr, PTE_XWR_X_SHIFT))) {
+        printf("exception xwxr\n");
         pc = raise_exception(a, pc, MCAUSE_FETCH_PAGE_FAULT, vaddr);
         return fetch_status::exception;
     }
@@ -5417,9 +5418,11 @@ static FORCE_INLINE fetch_status fetch_translate_pc_slow(STATE_ACCESS &a, uint64
     // We only execute directly from RAM (as in "random access memory", which includes ROM)
     // If the range is not memory or not executable, this as a PMA violation
     if (unlikely(!pma.get_istart_M() || !pma.get_istart_X())) {
+        printf("insn access fault\n");
         pc = raise_exception(a, pc, MCAUSE_INSN_ACCESS_FAULT, vaddr);
         return fetch_status::exception;
     }
+    printf("calling replace tlb entry\n");
     unsigned char *hpage = a.template replace_tlb_entry<TLB_CODE>(vaddr, paddr, pma);
     uint64_t hoffset = vaddr & PAGE_OFFSET_MASK;
     *phptr = hpage + hoffset;
@@ -5441,8 +5444,10 @@ static FORCE_INLINE fetch_status fetch_translate_pc(STATE_ACCESS &a, uint64_t &p
     if (unlikely(!(a.template translate_vaddr_via_tlb<TLB_CODE, uint16_t>(vaddr, phptr)))) {
         INC_COUNTER(a.get_statistics(), tlb_cmiss);
         // Outline the slow path into a function call to minimize host CPU code cache pressure
+        printf("slow path\n");
         return fetch_translate_pc_slow(a, pc, vaddr, phptr);
     }
+    printf("tlb path\n");
     INC_COUNTER(a.get_statistics(), tlb_chit);
     return fetch_status::success;
 }
@@ -5460,13 +5465,18 @@ template <typename STATE_ACCESS>
 static FORCE_INLINE fetch_status fetch_insn(STATE_ACCESS &a, uint64_t &pc, uint32_t &insn, uint64_t &fetch_vaddr_page,
     uint64_t &fetch_vh_offset) {
     unsigned char *hptr = nullptr;
+    if (pc == 0) {
+        printf("pc == 0\n");
+    }
     uint64_t vaddr_page = pc & ~PAGE_OFFSET_MASK;
     // If pc is in the same page as the last pc fetch,
     // we can just reuse last fetch translation, skipping TLB or slow address translation altogether.
     if (likely(vaddr_page == fetch_vaddr_page)) {
+        printf("vaddr_page == fetch_vaddr_page\n");
         hptr = cast_addr_to_ptr<unsigned char *>(pc + fetch_vh_offset);
     } else {
         // Not in the same page as last the fetch, we need to perform address translation
+        printf("fetch_translate_pc\n");
         if (unlikely(fetch_translate_pc(a, pc, pc, &hptr) == fetch_status::exception)) {
             return fetch_status::exception;
         }
@@ -5477,6 +5487,7 @@ static FORCE_INLINE fetch_status fetch_insn(STATE_ACCESS &a, uint64_t &pc, uint3
     // The following code assumes pc is always 2-byte aligned, this is guaranteed by RISC-V spec.
     // If pc is pointing to the very last 2 bytes of a page, it's crossing a page boundary.
     if (unlikely(((~pc & PAGE_OFFSET_MASK) >> 1) == 0)) {
+        printf("boundary\n");
         // Here we are crossing page boundary, this is unlikely (1 in 2048 possible cases)
         insn = aliased_aligned_read<uint16_t>(hptr);
         // If not a compressed instruction, we must read 2 additional bytes from the next page.
@@ -5499,6 +5510,7 @@ static FORCE_INLINE fetch_status fetch_insn(STATE_ACCESS &a, uint64_t &pc, uint3
     // therefore we must perform a misaligned 4 byte read on a 2 byte aligned pointer.
     // In case pc holds a compressed instruction, insn will store 2 additional bytes,
     // but this is fine because later the instruction decoder will discard them.
+    
     insn = aliased_unaligned_read<uint32_t, uint16_t>(hptr);
     return fetch_status::success;
 }
@@ -5559,6 +5571,7 @@ NO_INLINE void interpret_loop(STATE_ACCESS &a, uint64_t mcycle_end, uint64_t mcy
 
             // Try to fetch the next instruction
             if (likely(fetch_insn(a, pc, insn, fetch_vaddr_page, fetch_vh_offset) == fetch_status::success)) {
+                printf("fetched\n");
                 // Try to execute it
                 execute_status status = execute_insn(a, pc, mcycle, insn);
 

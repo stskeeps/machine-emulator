@@ -41,7 +41,7 @@ SRCDIR := $(abspath src)
 BUILDBASE := $(abspath build)
 BUILDDIR = $(BUILDBASE)/$(UNAME)_$(shell uname -m)
 DOWNLOADDIR := $(DEPDIR)/downloads
-SUBCLEAN := $(addsuffix .clean,$(SRCDIR) uarch third-party/riscv-arch-tests)
+SUBCLEAN := $(addsuffix .clean,$(SRCDIR) uarch zkarch third-party/riscv-arch-tests)
 DEPDIRS := $(addprefix $(DEPDIR)/,grpc mongoose-7.9)
 DEPCLEAN := $(addsuffix .clean,$(DEPDIRS))
 COREPROTO := lib/grpc-interfaces/core.proto
@@ -152,6 +152,8 @@ source-default:
 	@eval $$($(MAKE) -s --no-print-directory env); $(MAKE) -C $(SRCDIR)
 uarch:
 	@eval $$($(MAKE) -s --no-print-directory env); $(MAKE) -C uarch
+zkarch:
+	@eval $$($(MAKE) -s --no-print-directory env); $(MAKE) -C zkarch
 
 $(BUILDDIR)/include/mongoose.h $(BUILDDIR)/lib/libmongoose.a: | $(BUILDDIR) $(DOWNLOADDIR)
 	mkdir -p $(BUILDDIR)/include $(BUILDDIR)/lib
@@ -247,5 +249,5 @@ install: install-dep install-emulator install-strip $(INSTALL_PLAT)
 
 .SECONDARY: $(DOWNLOADDIR) $(DEPDIRS) $(COREPROTO)
 
-.PHONY: help all submodules doc clean distclean downloads src test luacartesi grpc hash uarch \
+.PHONY: help all submodules doc clean distclean downloads src test luacartesi grpc hash uarch zkarch \
 	$(SUBDIRS) $(SUBCLEAN) $(DEPCLEAN)

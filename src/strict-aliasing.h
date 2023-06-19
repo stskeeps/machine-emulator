@@ -17,9 +17,10 @@
 #ifndef STRICT_ALIASING_H
 #define STRICT_ALIASING_H
 
+extern "C" void printout(const char *s);
+
 #include <cstring>
 #include <type_traits>
-
 /// \file
 /// \brief Enforcement of the strict aliasing rule
 
@@ -31,7 +32,10 @@ namespace cartesi {
 /// \param v Value to write.
 template <typename T>
 static inline void aliased_aligned_write(void *p, T v) {
-    memcpy(__builtin_assume_aligned(p, sizeof(T)), &v, sizeof(T));
+   if (p == NULL) {
+      printout("aliased_aligned_write null");
+   }
+   memcpy(__builtin_assume_aligned(p, sizeof(T)), &v, sizeof(T));
 }
 
 /// \brief Reads a value from memory.
@@ -40,7 +44,10 @@ static inline void aliased_aligned_write(void *p, T v) {
 /// \returns Value.
 template <typename T>
 static inline T aliased_aligned_read(const void *p) {
-    T v;
+   T v;
+   if (p == NULL) {
+      printout("aliased_aligned_read null");
+   }
     memcpy(&v, __builtin_assume_aligned(p, sizeof(T)), sizeof(T));
     return v;
 }
@@ -54,6 +61,9 @@ static inline T aliased_aligned_read(const void *p) {
 template <typename T, typename U>
 static inline T aliased_unaligned_read(const void *p) {
     T v;
+   if (p == NULL) {
+      printout("aliased_unaligned_read null");
+   }
     memcpy(&v, __builtin_assume_aligned(p, sizeof(U)), sizeof(T));
     return v;
 }
