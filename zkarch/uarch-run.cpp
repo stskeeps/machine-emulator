@@ -24,12 +24,15 @@
 
 using namespace cartesi;
 
-extern "C" void run_uarch() {
+extern "C" uint64_t run_uarch() {
     printf("hello from uarch\n");
     uintptr_t pma_shadow_state = page_in(
         (uint64_t) PMA_SHADOW_STATE_START);
+    uintptr_t pma_shadow_pmas = page_in(
+        (uint64_t) PMA_SHADOW_PMAS_START_DEF);
         
-    uarch_machine_state_access a(pma_shadow_state);
+    uarch_machine_state_access a(pma_shadow_state, pma_shadow_pmas);
+    printf("mcycle now: %llu\n", a.read_mcycle());
     // We want to advance the cartesi machine to the next mcycle
     uint64_t mcycle_end = a.read_mcycle() + 1;
     for (;;) {
@@ -41,5 +44,5 @@ extern "C" void run_uarch() {
             break;
         }
     }
-    printf("bye from uarch\n");
+    return a.read_mcycle();
 }
