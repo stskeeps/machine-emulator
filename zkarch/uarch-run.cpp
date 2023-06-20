@@ -24,25 +24,34 @@
 
 using namespace cartesi;
 
-extern "C" uint64_t run_uarch() {
+extern "C" uint64_t run_uarch(uint64_t mcycle_end) {
     printf("hello from uarch\n");
     uintptr_t pma_shadow_state = page_in(
         (uint64_t) PMA_SHADOW_STATE_START);
     uintptr_t pma_shadow_pmas = page_in(
         (uint64_t) PMA_SHADOW_PMAS_START_DEF);
+
+    uintptr_t pma_shadow_tlb = page_in_with_length((uint64_t) PMA_SHADOW_TLB_START_DEF, PMA_SHADOW_TLB_LENGTH_DEF);
         
-    uarch_machine_state_access a(pma_shadow_state, pma_shadow_pmas);
-    printf("mcycle now: %llu\n", a.read_mcycle());
+    uarch_machine_state_access a(pma_shadow_state, pma_shadow_pmas, pma_shadow_tlb);
+    uint64_t mcycle = a.read_mcycle();
+    printf("mcycle now: %llu\n", mcycle);
     // We want to advance the cartesi machine to the next mcycle
-    uint64_t mcycle_end = a.read_mcycle() + 1;
     for (;;) {
         if (a.read_iflags_H() || a.read_iflags_Y()) {
+            mcycle = a.read_mcycle();
             break;
         }
         interpret(a, mcycle_end);
-        if (a.read_mcycle() >= mcycle_end) {
+        mcycle = a.read_mcycle();
+        if (mcycle >= mcycle_end) {
             break;
         }
     }
-    return a.read_mcycle();
+    page_dirty((uint64_t) PMA_SHADOW_STATE_START);
+    page_dirty((uint64_t) PMA_SHADOW_TLB_START_DEF);
+    page_dirty((uint64_t) PMA_SHADOW_PMAS_START_DEF);
+    a.do_dirty_tlb();
+
+    return mcycle;
 }

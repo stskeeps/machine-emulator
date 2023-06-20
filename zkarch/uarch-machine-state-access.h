@@ -166,6 +166,12 @@ public:
     uarch_machine_state_access &operator=(uarch_machine_state_access &&) = delete;
     ~uarch_machine_state_access() = default;
 
+    void do_dirty_tlb() {
+        for (uint64_t i = 0; i < PMA_TLB_SIZE; ++i) {
+            do_dirty_tlb_entry<TLB_WRITE>(i);
+        }
+    }
+
 private:
     friend i_state_access<uarch_machine_state_access, uarch_pma_entry>;
 
@@ -712,6 +718,7 @@ private:
             if (tlbhe.vaddr_page != TLB_INVALID_PAGE) {
                 uarch_pma_entry &pma = do_get_pma_entry(static_cast<int>(tlbce.pma_index));
                 pma.mark_dirty_page(tlbce.paddr_page - pma.get_start());
+                page_dirty(tlbce.paddr_page);
             }
         }
         uint64_t vaddr_page = vaddr & ~PAGE_OFFSET_MASK;
@@ -738,6 +745,7 @@ private:
                 volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
                 uarch_pma_entry &pma = do_get_pma_entry(static_cast<int>(tlbce.pma_index));
                 pma.mark_dirty_page(tlbce.paddr_page - pma.get_start());
+                page_dirty(tlbce.paddr_page);
             } else {
                 tlbhe.vaddr_page = TLB_INVALID_PAGE;
             }
@@ -745,6 +753,17 @@ private:
             tlbhe.vaddr_page = TLB_INVALID_PAGE;
         }
     }
+
+    template <TLB_entry_type ETYPE>
+    void do_dirty_tlb_entry(uint64_t eidx) {
+        volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
+        if (tlbhe.vaddr_page != TLB_INVALID_PAGE) {
+            volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
+            tlbhe.vh_offset = 0;
+            page_dirty(tlbce.paddr_page);
+        }
+    }
+
 
     template <TLB_entry_type ETYPE>
     void do_flush_tlb_type() {
