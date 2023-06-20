@@ -110,6 +110,19 @@ static inline uint64_t tlb_get_entry_cold_abs_addr(uint64_t eidx) {
 }
 
 template <TLB_entry_type ETYPE>
+static inline uint64_t tlb_get_entry_hot_rel_addr(uint64_t eidx) {
+    return offsetof(shadow_tlb_state, hot) +
+        (ETYPE * sizeof(std::array<tlb_hot_entry, PMA_TLB_SIZE>)) + (eidx * sizeof(tlb_hot_entry));
+}
+
+template <TLB_entry_type ETYPE>
+static inline uint64_t tlb_get_entry_cold_rel_addr(uint64_t eidx) {
+    return offsetof(shadow_tlb_state, cold) +
+        (ETYPE * sizeof(std::array<tlb_cold_entry, PMA_TLB_SIZE>)) + (eidx * sizeof(tlb_cold_entry));
+}
+
+
+template <TLB_entry_type ETYPE>
 static inline uint64_t tlb_get_vaddr_page_rel_addr(uint64_t eidx) {
     return offsetof(shadow_tlb_state, hot) + (ETYPE * sizeof(std::array<tlb_hot_entry, PMA_TLB_SIZE>)) +
         (eidx * sizeof(tlb_hot_entry)) + offsetof(tlb_hot_entry, vaddr_page);

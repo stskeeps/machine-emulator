@@ -38,6 +38,8 @@
 namespace cartesi {
 
 extern "C" uintptr_t page_in(uint64_t);
+extern "C" uintptr_t page_in_with_length(uint64_t paddr, uint64_t length);
+extern "C" uintptr_t page_dirty(uint64_t paddr);
 
 template <typename T>
 static T raw_read_memory(uint64_t paddr) {
@@ -151,10 +153,12 @@ class uarch_machine_state_access : public i_state_access<uarch_machine_state_acc
     std::array<std::optional<uarch_pma_entry>, PMA_MAX> m_pmas;
     uintptr_t m_shadow_state;
     uintptr_t m_shadow_pmas;
+    uintptr_t m_shadow_tlb;
 public:
-    uarch_machine_state_access(uintptr_t shadow_state, uintptr_t shadow_pmas) {
+    uarch_machine_state_access(uintptr_t shadow_state, uintptr_t shadow_pmas, uintptr_t shadow_tlb) {
         m_shadow_state = shadow_state;
         m_shadow_pmas = shadow_pmas;
+        m_shadow_tlb = shadow_tlb;
     }
     uarch_machine_state_access(const uarch_machine_state_access &) = delete;
     uarch_machine_state_access(uarch_machine_state_access &&) = delete;
@@ -527,18 +531,24 @@ private:
 
     template <typename T>
     void do_read_memory_word(uint64_t paddr, const unsigned char *hpage, uint64_t hoffset, T *pval) {
-        (void) hpage;
-        (void) hoffset;
-        *pval = raw_read_memory<T>(paddr);
+        (void) paddr;
+#ifdef ZKARCH_DEBUG
+        printf("do_read_memory_word\n");
+#endif
+        auto *h = cast_addr_to_ptr<unsigned char *>(((uint64_t) hpage) + hoffset);
+        *pval = aliased_aligned_read<T>(h);
     }
 
     void do_write_memory(uint64_t paddr, const unsigned char *data, uint64_t log2_size) {}
 
     template <typename T>
     void do_write_memory_word(uint64_t paddr, const unsigned char *hpage, uint64_t hoffset, T val) {
-        (void) hpage;
-        (void) hoffset;
-        raw_write_memory(paddr, val);
+        (void) paddr;
+#ifdef ZKARCH_DEBUG
+        printf("do_write_memory_word\n");
+#endif
+        auto *h = cast_addr_to_ptr<unsigned char *>(((uint64_t) hpage) + hoffset);
+        aliased_aligned_write<T>(h, val);
     }
 
     template <typename T>
@@ -623,28 +633,37 @@ private:
 
     template <TLB_entry_type ETYPE>
     volatile tlb_hot_entry& do_get_tlb_hot_entry(uint64_t eidx) {
+#ifdef ZKARCH_DEBUG
+        printf("do_get_tlb_hot_entry\n");
+#endif
         // Volatile is used, so the compiler does not optimize out, or do of order writes.
-        volatile tlb_hot_entry *tlbe = reinterpret_cast<tlb_hot_entry *>(tlb_get_entry_hot_abs_addr<ETYPE>(eidx));
+        volatile tlb_hot_entry *tlbe = reinterpret_cast<tlb_hot_entry *>(m_shadow_tlb + tlb_get_entry_hot_rel_addr<ETYPE>(eidx));
         return *tlbe;
     }
 
     template <TLB_entry_type ETYPE>
     volatile tlb_cold_entry& do_get_tlb_entry_cold(uint64_t eidx) {
         // Volatile is used, so the compiler does not optimize out, or do of order writes.
-        volatile tlb_cold_entry *tlbe = reinterpret_cast<tlb_cold_entry *>(tlb_get_entry_cold_abs_addr<ETYPE>(eidx));
+#ifdef ZKARCH_DEBUG
+        printf("do_get_tlb_cold_entry\n");
+#endif
+        volatile tlb_cold_entry *tlbe = reinterpret_cast<tlb_cold_entry *>(m_shadow_tlb + tlb_get_entry_cold_rel_addr<ETYPE>(eidx));
         return *tlbe;
     }
 
     template <TLB_entry_type ETYPE, typename T>
     bool do_translate_vaddr_via_tlb(uint64_t vaddr, unsigned char **phptr) {
+#ifdef ZKARCH_DEBUG
         printout("translate vaddr via tlb");
+#endif
         uint64_t eidx = tlb_get_entry_index(vaddr);
         const volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         if (tlb_is_hit<T>(tlbhe.vaddr_page, vaddr)) {
+#ifdef ZKARCH_DEBUG
             printout("tlb hit");
+#endif
             uint64_t poffset = vaddr & PAGE_OFFSET_MASK;
-            const volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
-            *phptr = cast_addr_to_ptr<unsigned char *>(tlbce.paddr_page + poffset);
+            *phptr = cast_addr_to_ptr<unsigned char *>(tlbhe.vh_offset + vaddr);
             return true;
         }
         return false;
@@ -652,13 +671,14 @@ private:
 
     template <TLB_entry_type ETYPE, typename T>
     bool do_read_memory_word_via_tlb(uint64_t vaddr, T *pval) {
+#ifdef ZKARCH_DEBUG
         printout("do_read_memory_word_via_tlb");
+#endif
         uint64_t eidx = tlb_get_entry_index(vaddr);
         const volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         if (tlb_is_hit<T>(tlbhe.vaddr_page, vaddr)) {
-            uint64_t poffset = vaddr & PAGE_OFFSET_MASK;
-            const volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
-            *pval = raw_read_memory<T>(tlbce.paddr_page + poffset);
+            auto *h = cast_addr_to_ptr<unsigned char *>(tlbhe.vh_offset + vaddr);
+            *pval = aliased_aligned_read<T>(h);
             return true;
         }
         return false;
@@ -666,13 +686,14 @@ private:
 
     template <TLB_entry_type ETYPE, typename T>
     bool do_write_memory_word_via_tlb(uint64_t vaddr, T val) {
+#ifdef ZKARCH_DEBUG
         printout("do_write_memory_word_via_tlb");
+#endif
         uint64_t eidx = tlb_get_entry_index(vaddr);
         volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         if (tlb_is_hit<T>(tlbhe.vaddr_page, vaddr)) {
-            uint64_t poffset = vaddr & PAGE_OFFSET_MASK;
-            const volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
-            raw_write_memory(tlbce.paddr_page + poffset, val);
+            auto *h = cast_addr_to_ptr<unsigned char *>(tlbhe.vh_offset + vaddr);
+            aliased_aligned_write(h, val);
             return true;
         }
         return false;
@@ -680,7 +701,9 @@ private:
 
     template <TLB_entry_type ETYPE>
     unsigned char *do_replace_tlb_entry(uint64_t vaddr, uint64_t paddr, uarch_pma_entry &pma) {
+#ifdef ZKARCH_DEBUG
         printout("do_replace_tlb_entry");
+#endif
         uint64_t eidx = tlb_get_entry_index(vaddr);
         volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
@@ -694,17 +717,19 @@ private:
         uint64_t vaddr_page = vaddr & ~PAGE_OFFSET_MASK;
         uint64_t paddr_page = paddr & ~PAGE_OFFSET_MASK;
         tlbhe.vaddr_page = vaddr_page;
-        // The paddr_must field must be written only after vaddr_page is written,
-        // because the uarch memory bridge reads vaddr_page to compute vh_offset when updating paddr_page.
+        uint64_t haddr = (uint64_t) page_in(paddr_page);
+        tlbhe.vh_offset = haddr - vaddr_page;
         tlbce.paddr_page = paddr_page;
         tlbce.pma_index = static_cast<uint64_t>(pma.get_index());
-        // Note that we can't write here the correct vh_offset value, because it depends in a host pointer,
-        // however the uarch memory bridge will take care of updating it.
-        return cast_addr_to_ptr<unsigned char*>(page_in(paddr_page));
+
+        return cast_addr_to_ptr<unsigned char*>(haddr);
     }
 
     template <TLB_entry_type ETYPE>
     void do_flush_tlb_entry(uint64_t eidx) {
+#ifdef ZKARCH_DEBUG
+        printf("do_flush_tlb_entry\n");
+#endif
         volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         // Mark page that was on TLB as dirty so we know to update the Merkle tree
         if constexpr (ETYPE == TLB_WRITE) {

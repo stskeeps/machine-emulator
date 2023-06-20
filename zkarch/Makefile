@@ -30,7 +30,7 @@ OPTFLAGS+=-Og -g
 else
 OPTFLAGS+=-O2 -g0
 endif
-OPTFLAGS=-Og -g
+OPTFLAGS=-O2 -g
 
 # Link time optimizations
 ifeq ($(lto),yes)

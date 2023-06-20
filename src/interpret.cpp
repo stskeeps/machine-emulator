@@ -893,6 +893,9 @@ static FORCE_INLINE bool read_virtual_memory(STATE_ACCESS &a, uint64_t &pc, uint
 template <typename T, typename STATE_ACCESS>
 static NO_INLINE std::pair<execute_status, uint64_t> write_virtual_memory_slow(STATE_ACCESS &a, uint64_t pc,
     uint64_t mcycle, uint64_t vaddr, uint64_t val64) {
+#ifdef ZKARCH_DEBUG
+    printf("write_virtual_memory_slow\n");
+#endif
     using U = std::make_unsigned_t<T>;
     // No support for misaligned accesses: They are handled by a trap in BBL
     if (unlikely(vaddr & (sizeof(T) - 1))) {
@@ -937,6 +940,9 @@ template <typename T, typename STATE_ACCESS>
 static FORCE_INLINE execute_status write_virtual_memory(STATE_ACCESS &a, uint64_t &pc, uint64_t mcycle, uint64_t vaddr,
     uint64_t val64) {
     // Try hitting the TLB
+#ifdef ZKARCH_DEBUG
+    printf("write_virtual_memory\n");
+#endif
     if (unlikely((!a.template write_memory_word_via_tlb<TLB_WRITE>(vaddr, static_cast<T>(val64))))) {
         INC_COUNTER(a.get_statistics(), tlb_wmiss);
         // Outline the slow path into a function call to minimize host CPU code cache pressure
@@ -961,13 +967,16 @@ static void dump_insn(STATE_ACCESS &a, uint64_t pc, uint32_t insn, const char *n
     // If we are running in the microinterpreter, we may or may not be collecting a step access log.
     // To prevent additional address translation end up in the log,
     // the following check will always be false when MICROARCHITECTURE is defined.
+#if 0
     if (std::is_same<STATE_ACCESS, state_access>::value &&
         !translate_virtual_address<STATE_ACCESS, false>(a, &ppc, pc, PTE_XWR_X_SHIFT)) {
         ppc = pc;
         fprintf(stderr, "v    %08" PRIx64, ppc);
     } else {
+
         fprintf(stderr, "p    %08" PRIx64, ppc);
     }
+#endif
     fprintf(stderr, ":   %08" PRIx32 "   ", insn);
     fprintf(stderr, "%s\n", name);
 #else
@@ -5409,7 +5418,9 @@ static FORCE_INLINE fetch_status fetch_translate_pc_slow(STATE_ACCESS &a, uint64
     uint64_t paddr{};
     // Walk page table and obtain the physical address
     if (unlikely(!translate_virtual_address(a, &paddr, vaddr, PTE_XWR_X_SHIFT))) {
+#ifdef ZKARCH_DEBUG
         printf("exception xwxr\n");
+#endif
         pc = raise_exception(a, pc, MCAUSE_FETCH_PAGE_FAULT, vaddr);
         return fetch_status::exception;
     }
@@ -5418,11 +5429,15 @@ static FORCE_INLINE fetch_status fetch_translate_pc_slow(STATE_ACCESS &a, uint64
     // We only execute directly from RAM (as in "random access memory", which includes ROM)
     // If the range is not memory or not executable, this as a PMA violation
     if (unlikely(!pma.get_istart_M() || !pma.get_istart_X())) {
+#ifdef ZKARCH_DEBUG
         printf("insn access fault\n");
+#endif
         pc = raise_exception(a, pc, MCAUSE_INSN_ACCESS_FAULT, vaddr);
         return fetch_status::exception;
     }
+#ifdef ZKARCH_DEBUG
     printf("calling replace tlb entry\n");
+#endif
     unsigned char *hpage = a.template replace_tlb_entry<TLB_CODE>(vaddr, paddr, pma);
     uint64_t hoffset = vaddr & PAGE_OFFSET_MASK;
     *phptr = hpage + hoffset;
@@ -5444,10 +5459,14 @@ static FORCE_INLINE fetch_status fetch_translate_pc(STATE_ACCESS &a, uint64_t &p
     if (unlikely(!(a.template translate_vaddr_via_tlb<TLB_CODE, uint16_t>(vaddr, phptr)))) {
         INC_COUNTER(a.get_statistics(), tlb_cmiss);
         // Outline the slow path into a function call to minimize host CPU code cache pressure
+#ifdef ZKARCH_DEBUG
         printf("slow path\n");
+#endif
         return fetch_translate_pc_slow(a, pc, vaddr, phptr);
     }
+#ifdef ZKARCH_DEBUG
     printf("tlb path\n");
+#endif
     INC_COUNTER(a.get_statistics(), tlb_chit);
     return fetch_status::success;
 }
@@ -5465,18 +5484,24 @@ template <typename STATE_ACCESS>
 static FORCE_INLINE fetch_status fetch_insn(STATE_ACCESS &a, uint64_t &pc, uint32_t &insn, uint64_t &fetch_vaddr_page,
     uint64_t &fetch_vh_offset) {
     unsigned char *hptr = nullptr;
+#ifdef ZKARCH_DEBUG
     if (pc == 0) {
         printf("pc == 0\n");
     }
+#endif
     uint64_t vaddr_page = pc & ~PAGE_OFFSET_MASK;
     // If pc is in the same page as the last pc fetch,
     // we can just reuse last fetch translation, skipping TLB or slow address translation altogether.
     if (likely(vaddr_page == fetch_vaddr_page)) {
+#ifdef ZKARCH_DEBUG
         printf("vaddr_page == fetch_vaddr_page\n");
+#endif
         hptr = cast_addr_to_ptr<unsigned char *>(pc + fetch_vh_offset);
     } else {
         // Not in the same page as last the fetch, we need to perform address translation
+#ifdef ZKARCH_DEBUG
         printf("fetch_translate_pc\n");
+#endif
         if (unlikely(fetch_translate_pc(a, pc, pc, &hptr) == fetch_status::exception)) {
             return fetch_status::exception;
         }
@@ -5487,7 +5512,9 @@ static FORCE_INLINE fetch_status fetch_insn(STATE_ACCESS &a, uint64_t &pc, uint3
     // The following code assumes pc is always 2-byte aligned, this is guaranteed by RISC-V spec.
     // If pc is pointing to the very last 2 bytes of a page, it's crossing a page boundary.
     if (unlikely(((~pc & PAGE_OFFSET_MASK) >> 1) == 0)) {
+#ifdef ZKARCH_DEBUG
         printf("boundary\n");
+#endif
         // Here we are crossing page boundary, this is unlikely (1 in 2048 possible cases)
         insn = aliased_aligned_read<uint16_t>(hptr);
         // If not a compressed instruction, we must read 2 additional bytes from the next page.
@@ -5571,7 +5598,9 @@ NO_INLINE void interpret_loop(STATE_ACCESS &a, uint64_t mcycle_end, uint64_t mcy
 
             // Try to fetch the next instruction
             if (likely(fetch_insn(a, pc, insn, fetch_vaddr_page, fetch_vh_offset) == fetch_status::success)) {
+#ifdef ZKARCH_DEBUG
                 printf("fetched\n");
+#endif
                 // Try to execute it
                 execute_status status = execute_insn(a, pc, mcycle, insn);
 
