@@ -168,7 +168,17 @@ public:
 
     void do_dirty_tlb() {
         for (uint64_t i = 0; i < PMA_TLB_SIZE; ++i) {
+            do_dirty_tlb_entry<TLB_READ>(i);
+            do_dirty_tlb_entry<TLB_CODE>(i);
             do_dirty_tlb_entry<TLB_WRITE>(i);
+        }
+    }
+
+    void page_in_tlb_contents() {
+        for (uint64_t i = 0; i < PMA_TLB_SIZE; ++i) {
+            do_tlb_page_in<TLB_READ>(i);
+            do_tlb_page_in<TLB_WRITE>(i);
+            do_tlb_page_in<TLB_CODE>(i);
         }
     }
 
@@ -663,12 +673,17 @@ private:
         printout("translate vaddr via tlb");
 #endif
         uint64_t eidx = tlb_get_entry_index(vaddr);
-        const volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
+        volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         if (tlb_is_hit<T>(tlbhe.vaddr_page, vaddr)) {
 #ifdef ZKARCH_DEBUG
             printout("tlb hit");
 #endif
             uint64_t poffset = vaddr & PAGE_OFFSET_MASK;
+            if (tlbhe.vh_offset == 0) {
+                volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
+                uint64_t haddr = (uint64_t) page_in(tlbce.paddr_page);
+                tlbhe.vh_offset = haddr - tlbhe.vaddr_page;
+            }
             *phptr = cast_addr_to_ptr<unsigned char *>(tlbhe.vh_offset + vaddr);
             return true;
         }
@@ -681,8 +696,14 @@ private:
         printout("do_read_memory_word_via_tlb");
 #endif
         uint64_t eidx = tlb_get_entry_index(vaddr);
-        const volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
+        volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         if (tlb_is_hit<T>(tlbhe.vaddr_page, vaddr)) {
+            if (tlbhe.vh_offset == 0) {
+                volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
+                uint64_t haddr = (uint64_t) page_in(tlbce.paddr_page);
+                tlbhe.vh_offset = haddr - tlbhe.vaddr_page;
+            }
+
             auto *h = cast_addr_to_ptr<unsigned char *>(tlbhe.vh_offset + vaddr);
             *pval = aliased_aligned_read<T>(h);
             return true;
@@ -698,6 +719,11 @@ private:
         uint64_t eidx = tlb_get_entry_index(vaddr);
         volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         if (tlb_is_hit<T>(tlbhe.vaddr_page, vaddr)) {
+            if (tlbhe.vh_offset == 0) {
+                volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
+                uint64_t haddr = (uint64_t) page_in(tlbce.paddr_page);
+                tlbhe.vh_offset = haddr - tlbhe.vaddr_page;
+            }
             auto *h = cast_addr_to_ptr<unsigned char *>(tlbhe.vh_offset + vaddr);
             aliased_aligned_write(h, val);
             return true;
@@ -718,7 +744,9 @@ private:
             if (tlbhe.vaddr_page != TLB_INVALID_PAGE) {
                 uarch_pma_entry &pma = do_get_pma_entry(static_cast<int>(tlbce.pma_index));
                 pma.mark_dirty_page(tlbce.paddr_page - pma.get_start());
-                page_dirty(tlbce.paddr_page);
+                if (tlbhe.vh_offset != 0) {
+                    page_dirty(tlbce.paddr_page);
+                }
             }
         }
         uint64_t vaddr_page = vaddr & ~PAGE_OFFSET_MASK;
@@ -745,7 +773,9 @@ private:
                 volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
                 uarch_pma_entry &pma = do_get_pma_entry(static_cast<int>(tlbce.pma_index));
                 pma.mark_dirty_page(tlbce.paddr_page - pma.get_start());
-                page_dirty(tlbce.paddr_page);
+                if (tlbhe.vh_offset != 0) {
+                    page_dirty(tlbce.paddr_page);
+                }
             } else {
                 tlbhe.vaddr_page = TLB_INVALID_PAGE;
             }
@@ -759,11 +789,24 @@ private:
         volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         if (tlbhe.vaddr_page != TLB_INVALID_PAGE) {
             volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
+            if constexpr (ETYPE == TLB_WRITE) {
+                if (tlbhe.vh_offset != 0) {
+                    page_dirty(tlbce.paddr_page);
+                }
+            }
             tlbhe.vh_offset = 0;
-            page_dirty(tlbce.paddr_page);
         }
     }
 
+    template <TLB_entry_type ETYPE>
+    void do_tlb_page_in(uint64_t eidx) {
+        volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
+        if (tlbhe.vaddr_page != TLB_INVALID_PAGE) {
+            volatile tlb_cold_entry &tlbce = do_get_tlb_entry_cold<ETYPE>(eidx);
+            uint64_t haddr = (uint64_t) page_in(tlbce.paddr_page);
+            tlbhe.vh_offset = haddr - tlbhe.vaddr_page;
+        }
+    }
 
     template <TLB_entry_type ETYPE>
     void do_flush_tlb_type() {

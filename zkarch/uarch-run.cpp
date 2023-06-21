@@ -24,8 +24,10 @@
 
 using namespace cartesi;
 
-extern "C" uint64_t run_uarch(uint64_t mcycle_end) {
+extern "C" uint64_t run_uarch(uint64_t mcycle_begin, uint64_t mcycle_end) {
+#ifdef ZKARCH_DEBUG
     printf("hello from uarch\n");
+#endif
     uintptr_t pma_shadow_state = page_in(
         (uint64_t) PMA_SHADOW_STATE_START);
     uintptr_t pma_shadow_pmas = page_in(
@@ -34,8 +36,15 @@ extern "C" uint64_t run_uarch(uint64_t mcycle_end) {
     uintptr_t pma_shadow_tlb = page_in_with_length((uint64_t) PMA_SHADOW_TLB_START_DEF, PMA_SHADOW_TLB_LENGTH_DEF);
         
     uarch_machine_state_access a(pma_shadow_state, pma_shadow_pmas, pma_shadow_tlb);
+
     uint64_t mcycle = a.read_mcycle();
+    if (mcycle_begin != mcycle) {
+        abort();
+    }
+   
+#ifdef ZKARCH_DEBUG
     printf("mcycle now: %llu\n", mcycle);
+#endif
     // We want to advance the cartesi machine to the next mcycle
     for (;;) {
         if (a.read_iflags_H() || a.read_iflags_Y()) {
