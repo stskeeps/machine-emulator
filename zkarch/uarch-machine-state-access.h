@@ -782,6 +782,7 @@ private:
         } else {
             tlbhe.vaddr_page = TLB_INVALID_PAGE;
         }
+        tlbhe.vh_offset = 0;
     }
 
     template <TLB_entry_type ETYPE>
