@@ -238,7 +238,7 @@ install-emulator: $(BIN_INSTALL_PATH) $(LUA_INSTALL_CPATH)/cartesi $(LUA_INSTALL
 	cd $(BIN_INSTALL_PATH) && $(CHMOD_DATA) $(EMU_LUA_TO_BIN)
 	cd lib/machine-emulator-defines && $(INSTALL) $(EMU_TO_INC) $(INC_INSTALL_PATH)
 	cd $(LUA_INSTALL_CPATH) && $(CHMOD_EXEC) $(EMU_TO_LUA_CPATH)
-	cd uarch && $(INSTALL) $(UARCH_TO_IMAGES) $(IMAGES_INSTALL_PATH)
+	#cd uarch && $(INSTALL) $(UARCH_TO_IMAGES) $(IMAGES_INSTALL_PATH)
 
 install-strip:
 	cd $(BIN_INSTALL_PATH) && $(STRIP_EXEC) $(EMU_TO_BIN) $(DEP_TO_BIN)

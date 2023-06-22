@@ -94,6 +94,9 @@ static execute_status htif_console(i_device_state_access *a, uint64_t cmd, uint6
     // If console command is enabled, perform it and acknowledge
     if (cmd < 64 && (a->read_htif_iconsole() >> cmd) & 1) {
         if (cmd == HTIF_CONSOLE_PUTCHAR) {
+#ifdef ZKARCH_DEBUG
+            printout("putchar");
+#endif
             uint8_t ch = data & 0xff;
             tty_putchar(ch);
             a->write_htif_fromhost(HTIF_BUILD(HTIF_DEVICE_CONSOLE, cmd, 0));

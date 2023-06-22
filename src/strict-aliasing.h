@@ -17,7 +17,9 @@
 #ifndef STRICT_ALIASING_H
 #define STRICT_ALIASING_H
 
+#ifdef ZKARCH_DEBUG
 extern "C" void printout(const char *s);
+#endif
 
 #include <cstring>
 #include <type_traits>
@@ -32,9 +34,11 @@ namespace cartesi {
 /// \param v Value to write.
 template <typename T>
 static inline void aliased_aligned_write(void *p, T v) {
+#ifdef ZKARCH_DEBUG
    if (p == NULL) {
       printout("aliased_aligned_write null");
    }
+#endif
    memcpy(__builtin_assume_aligned(p, sizeof(T)), &v, sizeof(T));
 }
 
@@ -45,9 +49,11 @@ static inline void aliased_aligned_write(void *p, T v) {
 template <typename T>
 static inline T aliased_aligned_read(const void *p) {
    T v;
+#ifdef ZKARCH_DEBUG
    if (p == NULL) {
       printout("aliased_aligned_read null");
    }
+#endif
     memcpy(&v, __builtin_assume_aligned(p, sizeof(T)), sizeof(T));
     return v;
 }
@@ -61,9 +67,11 @@ static inline T aliased_aligned_read(const void *p) {
 template <typename T, typename U>
 static inline T aliased_unaligned_read(const void *p) {
     T v;
+#ifdef ZKARCH_DEBUG
    if (p == NULL) {
       printout("aliased_unaligned_read null");
    }
+#endif
     memcpy(&v, __builtin_assume_aligned(p, sizeof(U)), sizeof(T));
     return v;
 }
