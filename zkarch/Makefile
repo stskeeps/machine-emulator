@@ -43,8 +43,6 @@ UBFLAGS := -fno-strict-aliasing -fno-strict-overflow -fno-delete-null-pointer-ch
 CFLAGS := -march=rv32im -mabi=ilp32 -Wl,--gc-sections $(OPTFLAGS) $(UBFLAGS) \
 	-DMICROARCHITECTURE=1 \
 	-DAVOID_NATIVE_UINT128_T=1 \
-	-DDUMP_INSN \
-	-DZKARCH_DEBUG \
 	-ffreestanding \
 	-nostartfiles \
 	-nostdlib \

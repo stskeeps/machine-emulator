@@ -547,11 +547,12 @@ private:
 
     template <typename T>
     void do_read_memory_word(uint64_t paddr, const unsigned char *hpage, uint64_t hoffset, T *pval) {
-        (void) paddr;
+        (void) hpage;
 #ifdef ZKARCH_DEBUG
-        printf("do_read_memory_word\n");
+        printout("do_read_memory_word\n");
 #endif
-        auto *h = cast_addr_to_ptr<unsigned char *>(((uint64_t) hpage) + hoffset);
+        uint64_t phpage = page_in((uint64_t) paddr & ~PAGE_OFFSET_MASK);
+        auto *h = cast_addr_to_ptr<unsigned char *>(((uint64_t) phpage) + hoffset);
         *pval = aliased_aligned_read<T>(h);
     }
 
@@ -559,12 +560,14 @@ private:
 
     template <typename T>
     void do_write_memory_word(uint64_t paddr, const unsigned char *hpage, uint64_t hoffset, T val) {
-        (void) paddr;
+        (void) hpage;
 #ifdef ZKARCH_DEBUG
-        printf("do_write_memory_word\n");
+        printout("do_write_memory_word\n");
 #endif
-        auto *h = cast_addr_to_ptr<unsigned char *>(((uint64_t) hpage) + hoffset);
+        uint64_t phpage = page_in((uint64_t) paddr & ~PAGE_OFFSET_MASK);
+        auto *h = cast_addr_to_ptr<unsigned char *>(((uint64_t) phpage) + hoffset);
         aliased_aligned_write<T>(h, val);
+        page_dirty(paddr & ~PAGE_OFFSET_MASK);
     }
 
     template <typename T>
@@ -650,7 +653,7 @@ private:
     template <TLB_entry_type ETYPE>
     volatile tlb_hot_entry& do_get_tlb_hot_entry(uint64_t eidx) {
 #ifdef ZKARCH_DEBUG
-        printf("do_get_tlb_hot_entry\n");
+        printout("do_get_tlb_hot_entry\n");
 #endif
         // Volatile is used, so the compiler does not optimize out, or do of order writes.
         volatile tlb_hot_entry *tlbe = reinterpret_cast<tlb_hot_entry *>(m_shadow_tlb + tlb_get_entry_hot_rel_addr<ETYPE>(eidx));
@@ -661,7 +664,7 @@ private:
     volatile tlb_cold_entry& do_get_tlb_entry_cold(uint64_t eidx) {
         // Volatile is used, so the compiler does not optimize out, or do of order writes.
 #ifdef ZKARCH_DEBUG
-        printf("do_get_tlb_cold_entry\n");
+        printout("do_get_tlb_cold_entry\n");
 #endif
         volatile tlb_cold_entry *tlbe = reinterpret_cast<tlb_cold_entry *>(m_shadow_tlb + tlb_get_entry_cold_rel_addr<ETYPE>(eidx));
         return *tlbe;
@@ -708,6 +711,9 @@ private:
             *pval = aliased_aligned_read<T>(h);
             return true;
         }
+#ifdef ZKARCH_DEBUG
+        printout("tlb miss");
+#endif
         return false;
     }
 
@@ -763,7 +769,7 @@ private:
     template <TLB_entry_type ETYPE>
     void do_flush_tlb_entry(uint64_t eidx) {
 #ifdef ZKARCH_DEBUG
-        printf("do_flush_tlb_entry\n");
+        printout("do_flush_tlb_entry\n");
 #endif
         volatile tlb_hot_entry &tlbhe = do_get_tlb_hot_entry<ETYPE>(eidx);
         // Mark page that was on TLB as dirty so we know to update the Merkle tree
