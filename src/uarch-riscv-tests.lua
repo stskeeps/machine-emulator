@@ -273,27 +273,83 @@ local function open_steps_json_log(test_name, indent)
     return f
 end
 
-local function write_access_to_log(access, out, indent, last)
+local function dump_json_sibling_hashes(sibling_hashes, out, indent)
+    for i, h in ipairs(sibling_hashes) do
+        util.indentout(out, indent, '"%s"', util.hexhash(h))
+        if sibling_hashes[i+1] then out:write(',\n')
+        else out:write('\n') end
+    end
+end
+
+local function dump_json_proof(proof, out, indent)
+    util.indentout(out, indent, '"target_address": %u,\n', proof.target_address)
+    util.indentout(out, indent, '"log2_target_size": %u,\n', proof.log2_target_size)
+    util.indentout(out, indent, '"log2_root_size": %u,\n', proof.log2_root_size)
+    util.indentout(out, indent, '"target_hash": "%s",\n', util.hexhash(proof.target_hash))
+    util.indentout(out, indent, '"sibling_hashes": [\n')
+    dump_json_sibling_hashes(proof.sibling_hashes, out, indent+1)
+    util.indentout(out, indent, '],\n')
+    util.indentout(out, indent, '"root_hash": "%s"\n', util.hexhash(proof.root_hash))
+end
+
+local function dump_json_log_notes(notes, out, indent)
+    local n = #notes
+    for i, note in ipairs(notes) do
+        util.indentout(out, indent, '"%s"', note)
+        if i < n then out:write(',\n')
+        else out:write("\n") end
+    end
+end
+
+local function dump_json_log_brackets(brackets, out, indent)
+    local n = #brackets
+    for i, bracket in ipairs(brackets) do
+        util.indentout(out, indent, '{\n')
+        util.indentout(out, indent+1, '"type": "%s",\n', bracket.type)
+        util.indentout(out, indent+1, '"where": %u,\n', bracket.where)
+        util.indentout(out, indent+1, '"text": "%s"\n', bracket.text)
+        util.indentout(out, indent, '}')
+        if i < n then out:write(',\n')
+        else out:write("\n") end
+    end
+end
+
+local function dump_json_log_access(access, out, indent)
     util.indentout(out, indent, '{\n')
     util.indentout(out, indent+1, '"type": "%s",\n', access.type)
     util.indentout(out, indent+1, '"address": %u,\n', access.address)
-    if access.type == "write" then
-        util.indentout(out, indent+1, '"value": "%s"\n', util.hexstring(access.written))
+     if access.type == "write" then
+        util.indentout(out, indent+1, '"value": "%s"', util.hexstring(access.written))
     else
-        util.indentout(out, indent+1, '"value": "%s"\n', util.hexstring(access.read))
+        util.indentout(out, indent+1, '"value": "%s"', util.hexstring(access.read))
+    end
+    if access.proof then
+        out:write(",\n")
+        util.indentout(out, indent+1, '"proof": {\n')
+        dump_json_proof(access.proof, out, indent+2)
+        util.indentout(out, indent+1, '}\n')
+    else
+        out:write("\n")
     end
     util.indentout(out, indent, '}')
-    if not last then out:write(',') end
-    out:write('\n')
 end
+
+local function dump_json_log_accesses(accesses, out, indent)
+    local n = #accesses
+    for i, access in ipairs(accesses) do
+        dump_json_log_access(access, out, indent)
+        if i < n then out:write(',\n')
+        else out:write('\n') end
+    end
+end
+
 
 local function write_step_to_log(log, out, indent, last)
     local n = #log.accesses
     util.indentout(out, indent, '{\n')
     util.indentout(out, indent+1, '"accesses": [\n')
-    for i, access in ipairs(log.accesses) do
-        write_access_to_log(access, out, indent+2, i==n)
-    end
+
+    dump_json_log_accesses(log.accesses, out, indent+2)
     util.indentout(out, indent+1, ']\n')
     util.indentout(out, indent, '}')
     if not last then out:write(',') end
@@ -321,7 +377,7 @@ local function run_machine_writing_json_logs(machine, ctx)
     util.indentout(out, indent, '{ "steps":[\n')
     local step_count = 0
     while math.ult(machine:read_uarch_cycle(), max_cycle) do        
-        local log_type = {} -- no proofs, no annotations
+        local log_type = { proofs = true, annotations = true }
         local log = machine:step_uarch(log_type)
         step_count = step_count + 1
         local halted = machine:read_uarch_halt_flag()
