@@ -21,6 +21,17 @@
 
 using namespace cartesi;
 
+extern "C" uintptr_t page_in(uint64_t r) {
+   return 0;
+}
+
+extern "C" uintptr_t page_in_with_length(uint64_t paddr, uint64_t length) {
+   return 0;
+}
+extern "C" uintptr_t page_dirty(uint64_t paddr) {
+   return 0;
+}
+
 extern "C" void __cxa_pure_virtual() {
     abort();
 }

@@ -9,9 +9,8 @@ MEMORY
 }
  
 SECTIONS {
+         .text.init : { *(.text.init) } > code
          .text : ALIGN(4096) {
-    		*(.text._start)
-    		*(.text.__start)
 		*(.init)
     		*(.text*)
 	} >code

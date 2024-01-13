@@ -35,11 +35,26 @@ static void set_uarch_halt_flag() {
 /// \brief  Advances one mcycle by executing the "big machine interpreter" compiled to the microarchitecture
 /// \return This function never returns
 extern "C" NO_RETURN void interpret_next_mcycle_with_uarch() {
-    uarch_machine_state_access a;
+    _putchar(0xff);
+/*    printf("hello world\n");
+    uintptr_t pma_shadow_state = page_in((uint64_t) PMA_SHADOW_STATE_START);
+    uintptr_t pma_shadow_pmas = page_in(
+         (uint64_t) PMA_SHADOW_PMAS_START_DEF);
+         
+    uintptr_t pma_shadow_tlb = page_in_with_length((uint64_t) PMA_SHADOW_TLB_START_DEF, PMA_SHADOW_TLB_LENGTH_DEF);
+    uarch_machine_state_access a(pma_shadow_state, pma_shadow_pmas, pma_shadow_tlb);
+    
     uint64_t mcycle_end = a.read_mcycle() + 1;
     interpret(a, mcycle_end);
+    page_dirty((uint64_t) PMA_SHADOW_STATE_START);
+    page_dirty((uint64_t) PMA_SHADOW_TLB_START_DEF);
+    page_dirty((uint64_t) PMA_SHADOW_PMAS_START_DEF);
+    a.do_dirty_tlb();
+
     // Finished executing a whole mcycle: halt the microarchitecture
     set_uarch_halt_flag();
     // The micro interpreter will never execute this line because the micro machine is halted
-    __builtin_trap();
+    */
+    abort();
+    __builtin_trap(); 
 }
