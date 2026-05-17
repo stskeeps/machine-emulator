@@ -66,8 +66,9 @@
 
 #else // not _WIN32
 
-#if defined(HAVE_TTY) || defined(HAVE_TERMIOS) || defined(HAVE_USLEEP)
-#include <unistd.h> // write/read/close/usleep/fork
+#include <unistd.h> // write/read/close/usleep/fork (available on WASI too)
+#if !defined(HAVE_TTY) && !defined(HAVE_TERMIOS) && !defined(HAVE_USLEEP) && defined(__wasi__)
+// WASI libc provides dup/close/read/write but not fork
 #endif
 
 #if defined(HAVE_SELECT)

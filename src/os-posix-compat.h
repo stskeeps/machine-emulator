@@ -189,6 +189,19 @@
 
 #endif // _WIN32
 
+#ifdef __wasi__
+// WASI's <unistd.h> does not expose dup() without __wasilibc_unmodified_upstream
+// because WASI has no native dup syscall. For the Cartesi Machine emulator, dup
+// is only needed by the console/TTY code path (which is disabled via NO_TTY on
+// WASM builds). We provide a minimal stub.
+#include <unistd.h>
+[[maybe_unused]] static int dup(int fd) {
+    // On WASI we don't support true fd duplication; return the fd as-is.
+    // Callers are guarded by HAVE_TTY checks at runtime.
+    return fd;
+}
+#endif
+
 #include <fcntl.h> // IWYU pragma: keep
 
 #ifndef O_BINARY
