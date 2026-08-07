@@ -1,0 +1,12 @@
+[package]
+name = "cartesi-native-replay"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+sha2 = "0.10"
+tiny-keccak = { version = "2", features = ["keccak"] }
+
+[build-dependencies]
+cc = "1"

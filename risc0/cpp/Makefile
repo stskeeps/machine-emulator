@@ -92,7 +92,7 @@ EMULATOR_OBJS = $(patsubst %.c,%.emulator_c.o,$(patsubst %.cpp,%.emulator_cpp.o,
 
 .PHONY: all clean
 
-all: risc0-replay-steps.o
+all: risc0-replay-steps.o baochip-replay-steps.o
 
 GENERATED_HEADERS := $(EMULATOR_SRC_DIR)/cm-version.h $(EMULATOR_SRC_DIR)/interpret-jump-table.hpp
 
@@ -120,6 +120,12 @@ $(EMULATOR_SRC_DIR)/interpret-jump-table.hpp: $(EMULATOR_TOOLS_DIR)/gen-interpre
 
 risc0-replay-steps.o: $(EMULATOR_SRC_DIR)/cm-version.h $(EMULATOR_SRC_DIR)/interpret-jump-table.hpp $(EMULATOR_OBJS) $(RISC0ARCH_OBJS) $(RISC0_THIRDPARTY_OBJS)
 	$(LD) -relocatable $(EMULATOR_OBJS) $(RISC0ARCH_OBJS) $(RISC0_THIRDPARTY_OBJS) -o $@
+
+# Xous already supplies abort, compiler builtins, and the C runtime. Keep only
+# the replay implementation; dead diagnostic printf paths are discarded by the
+# final Xous linker's --gc-sections pass.
+baochip-replay-steps.o: $(EMULATOR_SRC_DIR)/cm-version.h $(EMULATOR_SRC_DIR)/interpret-jump-table.hpp $(EMULATOR_OBJS) risc0-replay-steps.risc0arch_cpp.o
+	$(LD) -relocatable $(EMULATOR_OBJS) risc0-replay-steps.risc0arch_cpp.o -o $@
 
 clean:
 	@rm -f *.o

@@ -4,6 +4,9 @@ Proves Cartesi Machine state transitions using RISC Zero's zkvm.
 Given a step log, generates a zero-knowledge proof that the
 state transition is valid.
 
+For direct replay without RISC Zero or proof generation, see
+[`rust/native-replay`](rust/native-replay/README.md).
+
 ## Building
 
     cd risc0 && make
