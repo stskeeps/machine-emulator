@@ -89,6 +89,9 @@ RISC0_THIRDPARTY_SOURCES_C=\
 RISC0_THIRDPARTY_OBJS = $(patsubst %.c,%.risc0_thirdparty_c.o,$(RISC0_THIRDPARTY_SOURCES_C))
 RISC0ARCH_OBJS = $(patsubst %.cpp,%.risc0arch_cpp.o,$(RISC0ARCH_SOURCES))
 EMULATOR_OBJS = $(patsubst %.c,%.emulator_c.o,$(patsubst %.cpp,%.emulator_cpp.o,$(EMULATOR_SOURCES)))
+BAOCHIP_EMULATOR_OBJS = $(patsubst %.c,%.baochip_emulator_c.o,$(patsubst %.cpp,%.baochip_emulator_cpp.o,$(EMULATOR_SOURCES)))
+BAOCHIP_CXXFLAGS := $(CXXFLAGS) -fno-jump-tables
+BAOCHIP_CFLAGS := $(CFLAGS) -fno-jump-tables -DNO_COMPUTED_GOTO=1
 
 .PHONY: all clean
 
@@ -101,6 +104,12 @@ GENERATED_HEADERS := $(EMULATOR_SRC_DIR)/cm-version.h $(EMULATOR_SRC_DIR)/interp
 
 %.emulator_c.o: $(EMULATOR_SRC_DIR)/%.c | $(GENERATED_HEADERS)
 	$(CC) $(CFLAGS) -c -o $@ $(EMULATOR_SRC_DIR)/$(<F)
+
+%.baochip_emulator_cpp.o: $(EMULATOR_SRC_DIR)/%.cpp | $(GENERATED_HEADERS)
+	$(CXX) $(BAOCHIP_CXXFLAGS) $(BAOCHIP_CFLAGS) -c -o $@ $(EMULATOR_SRC_DIR)/$(<F)
+
+%.baochip_emulator_c.o: $(EMULATOR_SRC_DIR)/%.c | $(GENERATED_HEADERS)
+	$(CC) $(BAOCHIP_CFLAGS) -c -o $@ $(EMULATOR_SRC_DIR)/$(<F)
 
 
 $(EMULATOR_SRC_DIR)/cm-version.h:
@@ -124,8 +133,11 @@ risc0-replay-steps.o: $(EMULATOR_SRC_DIR)/cm-version.h $(EMULATOR_SRC_DIR)/inter
 # Xous already supplies abort, compiler builtins, and the C runtime. Keep only
 # the replay implementation; dead diagnostic printf paths are discarded by the
 # final Xous linker's --gc-sections pass.
-baochip-replay-steps.o: $(EMULATOR_SRC_DIR)/cm-version.h $(EMULATOR_SRC_DIR)/interpret-jump-table.hpp $(EMULATOR_OBJS) risc0-replay-steps.risc0arch_cpp.o
-	$(LD) -relocatable $(EMULATOR_OBJS) risc0-replay-steps.risc0arch_cpp.o -o $@
+baochip-replay-steps.o: $(EMULATOR_SRC_DIR)/cm-version.h $(EMULATOR_SRC_DIR)/interpret-jump-table.hpp $(BAOCHIP_EMULATOR_OBJS) risc0-replay-steps.baochip_risc0arch_cpp.o
+	$(LD) -relocatable $(BAOCHIP_EMULATOR_OBJS) risc0-replay-steps.baochip_risc0arch_cpp.o -o $@
+
+risc0-replay-steps.baochip_risc0arch_cpp.o: risc0-replay-steps.cpp
+	$(CXX) $(BAOCHIP_CXXFLAGS) $(BAOCHIP_CFLAGS) -c -o $@ $<
 
 clean:
 	@rm -f *.o
