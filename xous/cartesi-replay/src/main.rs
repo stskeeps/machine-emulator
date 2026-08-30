@@ -155,8 +155,9 @@ fn main() -> ! {
     // Let usb-bao1x finish registering with xous-log before installing the mirror hook.
     std::thread::sleep(Duration::from_millis(500));
     usb.serial_console_input_injection();
-    // Give the host time to open the CDC terminal before the readiness banner.
+    // Give the host time to open the CDC terminal, then wait for an explicit Enter handshake.
     std::thread::sleep(Duration::from_secs(3));
+    usb.serial_wait_ascii(Some('\n'));
     send_all(&usb, READY_MESSAGE);
     let journal = replay(receive_log(&usb));
     send_all(&usb, &journal);

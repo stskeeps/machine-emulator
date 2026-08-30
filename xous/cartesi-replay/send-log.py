@@ -11,6 +11,11 @@ import serial
 
 JOURNAL_BYTES = 96
 READY_MESSAGE = b"CARTESI_READY\n"
+BOOT_MENU = b"Commands include:"
+
+
+class BootloaderPrompt(Exception):
+    pass
 
 
 def read_exact(port: serial.Serial, size: int) -> bytes:
@@ -46,8 +51,10 @@ def wait_ready(port: serial.Serial, verbose: bool = False) -> None:
         if not chunk:
             raise TimeoutError("timed out waiting for CARTESI_READY")
         received.extend(chunk)
-        if len(received) > len(READY_MESSAGE):
-            del received[:-len(READY_MESSAGE)]
+        if BOOT_MENU in received or b"Command not recognized" in received:
+            raise BootloaderPrompt
+        if len(received) > 4096:
+            del received[:-4096]
     if verbose:
         print("received CARTESI_READY", file=sys.stderr, flush=True)
 
@@ -71,19 +78,43 @@ def main() -> None:
     if not log:
         parser.error("step log is empty")
 
-    wait_for_port(args.port, args.timeout, args.verbose)
-    if args.verbose:
-        print(f"opening {args.port}; step log is {len(log)} bytes", file=sys.stderr, flush=True)
-    with serial.Serial(args.port, args.baud, timeout=args.timeout, write_timeout=args.timeout) as port:
-        wait_ready(port, args.verbose)
-        frame = struct.pack("<Q", len(log)) + log
-        port.write(frame)
-        port.flush()
+    frame = struct.pack("<Q", len(log)) + log
+    deadline = time.monotonic() + args.timeout
+    while True:
+        remaining = max(1.0, deadline - time.monotonic())
+        wait_for_port(args.port, remaining, args.verbose)
         if args.verbose:
-            print(f"sent {len(frame)} bytes; waiting for {JOURNAL_BYTES}-byte journal", file=sys.stderr, flush=True)
-        journal = read_exact(port, JOURNAL_BYTES)
-        if args.verbose:
-            print("received journal", file=sys.stderr, flush=True)
+            print(f"opening {args.port}; step log is {len(log)} bytes", file=sys.stderr, flush=True)
+        port = serial.Serial(args.port, args.baud, timeout=min(args.timeout, remaining), write_timeout=min(args.timeout, remaining))
+        try:
+            if args.verbose:
+                print("sending Enter handshake", file=sys.stderr, flush=True)
+            port.write(b"\n")
+            port.flush()
+            wait_ready(port, args.verbose)
+            port.write(frame)
+            port.flush()
+            if args.verbose:
+                print(f"sent {len(frame)} bytes; waiting for {JOURNAL_BYTES}-byte journal", file=sys.stderr, flush=True)
+            journal = read_exact(port, JOURNAL_BYTES)
+            if args.verbose:
+                print("received journal", file=sys.stderr, flush=True)
+            port.close()
+            break
+        except BootloaderPrompt:
+            if args.verbose:
+                print("bootloader menu detected; sending boot", file=sys.stderr, flush=True)
+            port.write(b"boot\n")
+            port.flush()
+            port.close()
+            gone_deadline = time.monotonic() + min(10.0, max(1.0, deadline - time.monotonic()))
+            while os.path.exists(args.port) and time.monotonic() < gone_deadline:
+                time.sleep(0.1)
+            if args.verbose:
+                print("waiting for Xous USB reconnect", file=sys.stderr, flush=True)
+        except Exception:
+            port.close()
+            raise
 
     destination = sys.stdout.buffer if args.output == "-" else open(args.output, "wb")
     try:
