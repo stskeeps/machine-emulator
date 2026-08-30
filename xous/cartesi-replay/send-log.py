@@ -8,6 +8,7 @@ import sys
 import serial
 
 JOURNAL_BYTES = 96
+READY_MESSAGE = b"CARTESI_READY\n"
 
 
 def read_exact(port: serial.Serial, size: int) -> bytes:
@@ -18,6 +19,17 @@ def read_exact(port: serial.Serial, size: int) -> bytes:
             raise TimeoutError(f"timed out after receiving {len(output)} of {size} journal bytes")
         output.extend(chunk)
     return bytes(output)
+
+
+def wait_ready(port: serial.Serial) -> None:
+    received = bytearray()
+    while not received.endswith(READY_MESSAGE):
+        chunk = port.read(1)
+        if not chunk:
+            raise TimeoutError("timed out waiting for CARTESI_READY")
+        received.extend(chunk)
+        if len(received) > len(READY_MESSAGE):
+            del received[:-len(READY_MESSAGE)]
 
 
 def main() -> None:
@@ -39,6 +51,7 @@ def main() -> None:
         parser.error("step log is empty")
 
     with serial.Serial(args.port, args.baud, timeout=args.timeout, write_timeout=args.timeout) as port:
+        wait_ready(port)
         port.write(struct.pack("<Q", len(log)))
         port.write(log)
         port.flush()
