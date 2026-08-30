@@ -11,6 +11,7 @@ import serial
 
 JOURNAL_BYTES = 96
 READY_MESSAGE = b"CARTESI_READY\n"
+RECEIVED_MESSAGE = b"CARTESI_RECEIVED\n"
 BOOT_MENU = b"Commands include:"
 
 
@@ -42,14 +43,26 @@ def wait_for_port(path: str, timeout: float, verbose: bool = False) -> None:
         print(f"found {path}", file=sys.stderr, flush=True)
 
 
-def wait_ready(port: serial.Serial, verbose: bool = False) -> None:
+def wait_ready(port: serial.Serial, timeout: float, verbose: bool = False) -> None:
     if verbose:
         print("waiting for CARTESI_READY", file=sys.stderr, flush=True)
     received = bytearray()
+    deadline = time.monotonic() + timeout
+    next_enter = time.monotonic()
     while not received.endswith(READY_MESSAGE):
+        now = time.monotonic()
+        if now >= deadline:
+            raise TimeoutError("timed out waiting for CARTESI_READY")
+        if now >= next_enter:
+            port.write(b"\n")
+            port.flush()
+            next_enter = now + 0.5
+            if verbose:
+                print("sending Enter handshake", file=sys.stderr, flush=True)
+        port.timeout = min(0.2, max(0.01, deadline - now))
         chunk = port.read(1)
         if not chunk:
-            raise TimeoutError("timed out waiting for CARTESI_READY")
+            continue
         received.extend(chunk)
         if BOOT_MENU in received or b"Command not recognized" in received:
             raise BootloaderPrompt
@@ -57,6 +70,22 @@ def wait_ready(port: serial.Serial, verbose: bool = False) -> None:
             del received[:-4096]
     if verbose:
         print("received CARTESI_READY", file=sys.stderr, flush=True)
+
+
+def wait_marker(port: serial.Serial, marker: bytes, timeout: float, verbose: bool = False) -> None:
+    received = bytearray()
+    deadline = time.monotonic() + timeout
+    while not received.endswith(marker):
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"timed out waiting for {marker!r}")
+        chunk = port.read(1)
+        if not chunk:
+            continue
+        received.extend(chunk)
+        if len(received) > 4096:
+            del received[:-4096]
+    if verbose:
+        print(f"received {marker.decode().strip()}", file=sys.stderr, flush=True)
 
 
 def main() -> None:
@@ -87,15 +116,15 @@ def main() -> None:
             print(f"opening {args.port}; step log is {len(log)} bytes", file=sys.stderr, flush=True)
         port = serial.Serial(args.port, args.baud, timeout=min(args.timeout, remaining), write_timeout=min(args.timeout, remaining))
         try:
-            if args.verbose:
-                print("sending Enter handshake", file=sys.stderr, flush=True)
-            port.write(b"\n")
-            port.flush()
-            wait_ready(port, args.verbose)
+            wait_ready(port, remaining, args.verbose)
+            port.timeout = min(args.timeout, remaining)
             port.write(frame)
             port.flush()
             if args.verbose:
-                print(f"sent {len(frame)} bytes; waiting for {JOURNAL_BYTES}-byte journal", file=sys.stderr, flush=True)
+                print(f"sent {len(frame)} bytes; waiting for CARTESI_RECEIVED", file=sys.stderr, flush=True)
+            wait_marker(port, RECEIVED_MESSAGE, remaining, args.verbose)
+            if args.verbose:
+                print(f"waiting for {JOURNAL_BYTES}-byte journal", file=sys.stderr, flush=True)
             journal = read_exact(port, JOURNAL_BYTES)
             if args.verbose:
                 print("received journal", file=sys.stderr, flush=True)

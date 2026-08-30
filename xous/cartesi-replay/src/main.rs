@@ -9,8 +9,9 @@ type MachineHash = [u8; 32];
 const LENGTH_BYTES: usize = 8;
 const JOURNAL_BYTES: usize = 96;
 #[cfg(target_os = "xous")]
-const READY_MESSAGE: &[u8] = b"CARTESI_READY
-";
+const READY_MESSAGE: &[u8] = b"CARTESI_READY\n";
+#[cfg(target_os = "xous")]
+const RECEIVED_MESSAGE: &[u8] = b"CARTESI_RECEIVED\n";
 
 extern "C" {
     fn risc0_replay_steps(
@@ -103,6 +104,12 @@ fn receive_log(usb: &usb_bao1x::UsbHid) -> Vec<u8> {
         input.extend_from_slice(&usb.serial_wait_binary());
         if input.len() >= LENGTH_BYTES {
             let length = u64::from_le_bytes(input[..LENGTH_BYTES].try_into().unwrap());
+            // The USB IPC hook can produce an empty zero-filled response while the
+            // listener is being installed. Ignore that response and keep waiting.
+            if length == 0 {
+                input.clear();
+                continue;
+            }
             break usize::try_from(length).expect("step log is too large for this target");
         }
     };
@@ -163,7 +170,9 @@ fn main() -> ! {
         }
     }
     send_all(&usb, READY_MESSAGE);
-    let journal = replay(receive_log(&usb));
+    let log = receive_log(&usb);
+    send_all(&usb, RECEIVED_MESSAGE);
+    let journal = replay(log);
     send_all(&usb, &journal);
     usb.serial_clear_input_hooks();
     xous::terminate_process(0)
