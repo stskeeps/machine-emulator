@@ -19,9 +19,16 @@ Build the RV32 replay object:
 make -C ../../risc0/cpp baochip-replay-steps.o
 ```
 
-Then build this standalone Xous app for Dabao:
+Then build this standalone Xous app for Dabao. Use the Xous-specific toolchain
+environment (the standard Rust toolchain does not include the custom Xous target):
 
 ```sh
+export HOME=/tmp/cartesi-risc0-home
+export PATH=/tmp/xous-cargo/bin:/tmp/xous-rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin:$PATH
+export CARGO_HOME=/tmp/xous-cargo
+export RUSTUP_HOME=/tmp/xous-rustup
+export SKIP_TOOLKIT_INSTALL=1
+
 cargo build --release --target riscv32imac-unknown-xous-elf \
   --features board-dabao --features bao1x
 ```
