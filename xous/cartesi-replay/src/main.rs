@@ -156,7 +156,12 @@ fn main() -> ! {
     std::thread::sleep(Duration::from_millis(500));
     usb.serial_console_input_injection();
     // Install the Enter handshake immediately so the host cannot race past it.
-    usb.serial_wait_ascii(Some('\n'));
+    loop {
+        let input = usb.serial_wait_ascii(None);
+        if input.contains('\n') || input.contains('\r') {
+            break;
+        }
+    }
     send_all(&usb, READY_MESSAGE);
     let journal = replay(receive_log(&usb));
     send_all(&usb, &journal);
