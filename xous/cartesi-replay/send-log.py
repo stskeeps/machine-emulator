@@ -32,7 +32,8 @@ def read_exact(port: serial.Serial, size: int, verbose: bool = False) -> bytes:
             raise TimeoutError(f"timed out after receiving {len(output)} of {size} journal bytes")
         output.extend(chunk)
         if verbose:
-            print(f"received {len(output)}/{size} journal bytes", file=sys.stderr, flush=True)
+            start = len(output) - len(chunk)
+            print(f"journal rx {start}:{len(output)}: {chunk.hex()}", file=sys.stderr, flush=True)
     if verbose:
         print(f"journal: {bytes(output).hex()}", file=sys.stderr, flush=True)
     return bytes(output)
