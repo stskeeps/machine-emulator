@@ -27,10 +27,14 @@ def read_exact(port: serial.Serial, size: int, verbose: bool = False) -> bytes:
     while len(output) < size:
         chunk = port.read(size - len(output))
         if not chunk:
+            if verbose:
+                print(f"partial journal ({len(output)}/{size}): {output.hex()}", file=sys.stderr, flush=True)
             raise TimeoutError(f"timed out after receiving {len(output)} of {size} journal bytes")
         output.extend(chunk)
         if verbose:
             print(f"received {len(output)}/{size} journal bytes", file=sys.stderr, flush=True)
+    if verbose:
+        print(f"journal: {bytes(output).hex()}", file=sys.stderr, flush=True)
     return bytes(output)
 
 
