@@ -182,7 +182,9 @@ fn main() -> ! {
     send_all(&usb, READY_MESSAGE);
     let log = receive_log(&usb);
     send_all(&usb, RECEIVED_MESSAGE);
+    log::info!("CARTESI_REPLAY_START bytes={}", log.len());
     let journal = replay(log);
+    log::info!("CARTESI_REPLAY_DONE");
     send_all(&usb, JOURNAL_MESSAGE);
     send_all(&usb, &journal);
     usb.serial_clear_input_hooks();
