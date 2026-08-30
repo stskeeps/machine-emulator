@@ -47,9 +47,9 @@ repository's `apps.uf2` whenever the replay app changes.
 ## Protocol
 
 Send an unsigned 64-bit little-endian log length immediately followed by that
-many log bytes over Baochip USB CDC. On startup, the app first emits the exact
-ASCII banner `CARTESI_READY\n`; wait for that banner before sending the frame.
-The app replies with exactly 96 bytes:
+many log bytes over Baochip USB CDC. After the host opens the port, send an ASCII
+Enter (`\n`). The app then emits the exact banner `CARTESI_READY\n`; wait for
+that banner before sending the binary frame. The app replies with exactly 96 bytes:
 
 ```text
 root_hash_before[32] || zero_padding[24] || mcycle_be[8] || root_hash_after[32]
