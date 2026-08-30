@@ -48,17 +48,14 @@ def wait_ready(port: serial.Serial, timeout: float, verbose: bool = False) -> No
         print("waiting for CARTESI_READY", file=sys.stderr, flush=True)
     received = bytearray()
     deadline = time.monotonic() + timeout
-    next_enter = time.monotonic()
+    port.write(b"\n")
+    port.flush()
+    if verbose:
+        print("sending Enter handshake", file=sys.stderr, flush=True)
     while not received.endswith(READY_MESSAGE):
         now = time.monotonic()
         if now >= deadline:
             raise TimeoutError("timed out waiting for CARTESI_READY")
-        if now >= next_enter:
-            port.write(b"\n")
-            port.flush()
-            next_enter = now + 0.5
-            if verbose:
-                print("sending Enter handshake", file=sys.stderr, flush=True)
         port.timeout = min(0.2, max(0.01, deadline - now))
         chunk = port.read(1)
         if not chunk:
