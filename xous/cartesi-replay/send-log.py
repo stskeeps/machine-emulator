@@ -11,6 +11,8 @@ import serial
 
 JOURNAL_BYTES = 96
 HOOK_SETTLE_SECONDS = 0.5
+TX_CHUNK_BYTES = 64
+TX_CHUNK_DELAY = 0.02
 READY_MESSAGE = b"CARTESI_READY\n"
 RECEIVED_MESSAGE = b"CARTESI_RECEIVED\n"
 BOOT_MENU = b"Commands include:"
@@ -124,8 +126,15 @@ def main() -> None:
                 print(f"waiting {HOOK_SETTLE_SECONDS:.1f}s for binary hook", file=sys.stderr, flush=True)
             time.sleep(HOOK_SETTLE_SECONDS)
             port.timeout = min(args.timeout, remaining)
-            port.write(frame)
-            port.flush()
+            sent = 0
+            while sent < len(frame):
+                chunk = frame[sent:sent + TX_CHUNK_BYTES]
+                port.write(chunk)
+                port.flush()
+                sent += len(chunk)
+                if args.verbose:
+                    print(f"sent {sent}/{len(frame)} bytes", file=sys.stderr, flush=True)
+                time.sleep(TX_CHUNK_DELAY)
             if args.verbose:
                 print(f"sent {len(frame)} bytes; waiting for CARTESI_RECEIVED", file=sys.stderr, flush=True)
             wait_marker(port, RECEIVED_MESSAGE, remaining, args.verbose)
