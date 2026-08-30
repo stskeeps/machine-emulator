@@ -319,6 +319,7 @@ dependencies = [
  "bao1x-hal-service",
  "cc",
  "getrandom 0.2.12",
+ "log",
  "serde_json",
  "sha2",
  "tiny-keccak",
