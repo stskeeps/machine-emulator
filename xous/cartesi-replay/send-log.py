@@ -109,6 +109,9 @@ def read_control_frame(port: serial.Serial, timeout: float, verbose: bool = Fals
         chunk = port.read(1)
         if not chunk:
             continue
+        if verbose:
+            shown = chr(chunk[0]) if 32 <= chunk[0] < 127 else "."
+            print(f"control rx byte: 0x{chunk[0]:02x} ({shown})", file=sys.stderr, flush=True)
         window.extend(chunk)
         if len(window) > len(CONTROL_MAGIC):
             del window[:-len(CONTROL_MAGIC)]
