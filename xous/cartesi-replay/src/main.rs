@@ -8,6 +8,9 @@ type MachineHash = [u8; 32];
 #[cfg(target_os = "xous")]
 const LENGTH_BYTES: usize = 8;
 const JOURNAL_BYTES: usize = 96;
+#[cfg(target_os = "xous")]
+const READY_MESSAGE: &[u8] = b"CARTESI_READY
+";
 
 extern "C" {
     fn risc0_replay_steps(
@@ -148,10 +151,8 @@ fn replay(mut log: Vec<u8>) -> [u8; JOURNAL_BYTES] {
 #[cfg(target_os = "xous")]
 fn main() -> ! {
     log_server::init_wait().expect("could not connect to the Xous log server");
-    std::thread::sleep(Duration::from_secs(5));
-    println!("hi from cartesi");
-
     let usb = usb_bao1x::UsbHid::new();
+    send_all(&usb, READY_MESSAGE);
     let journal = replay(receive_log(&usb));
     send_all(&usb, &journal);
     usb.serial_clear_input_hooks();
