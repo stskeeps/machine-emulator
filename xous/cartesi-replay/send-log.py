@@ -10,6 +10,7 @@ import time
 import serial
 
 JOURNAL_BYTES = 96
+HOOK_SETTLE_SECONDS = 0.5
 READY_MESSAGE = b"CARTESI_READY\n"
 RECEIVED_MESSAGE = b"CARTESI_RECEIVED\n"
 BOOT_MENU = b"Commands include:"
@@ -119,6 +120,9 @@ def main() -> None:
         port = serial.Serial(args.port, args.baud, timeout=min(args.timeout, remaining), write_timeout=min(args.timeout, remaining))
         try:
             wait_ready(port, remaining, args.verbose)
+            if args.verbose:
+                print(f"waiting {HOOK_SETTLE_SECONDS:.1f}s for binary hook", file=sys.stderr, flush=True)
+            time.sleep(HOOK_SETTLE_SECONDS)
             port.timeout = min(args.timeout, remaining)
             port.write(frame)
             port.flush()
