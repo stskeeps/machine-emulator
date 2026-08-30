@@ -19,13 +19,15 @@ class BootloaderPrompt(Exception):
     pass
 
 
-def read_exact(port: serial.Serial, size: int) -> bytes:
+def read_exact(port: serial.Serial, size: int, verbose: bool = False) -> bytes:
     output = bytearray()
     while len(output) < size:
         chunk = port.read(size - len(output))
         if not chunk:
             raise TimeoutError(f"timed out after receiving {len(output)} of {size} journal bytes")
         output.extend(chunk)
+        if verbose:
+            print(f"received {len(output)}/{size} journal bytes", file=sys.stderr, flush=True)
     return bytes(output)
 
 
@@ -79,6 +81,9 @@ def wait_marker(port: serial.Serial, marker: bytes, timeout: float, verbose: boo
         if not chunk:
             continue
         received.extend(chunk)
+        if verbose:
+            shown = chr(chunk[0]) if 32 <= chunk[0] < 127 else "."
+            print(f"rx marker byte: 0x{chunk[0]:02x} ({shown})", file=sys.stderr, flush=True)
         if len(received) > 4096:
             del received[:-4096]
     if verbose:
@@ -122,7 +127,7 @@ def main() -> None:
             wait_marker(port, RECEIVED_MESSAGE, remaining, args.verbose)
             if args.verbose:
                 print(f"waiting for {JOURNAL_BYTES}-byte journal", file=sys.stderr, flush=True)
-            journal = read_exact(port, JOURNAL_BYTES)
+            journal = read_exact(port, JOURNAL_BYTES, args.verbose)
             if args.verbose:
                 print("received journal", file=sys.stderr, flush=True)
             port.close()

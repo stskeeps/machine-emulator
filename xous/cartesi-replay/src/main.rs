@@ -100,8 +100,11 @@ pub unsafe extern "C" fn zk_concat_hash(
 #[cfg(target_os = "xous")]
 fn receive_log(usb: &usb_bao1x::UsbHid) -> Vec<u8> {
     let mut input = Vec::new();
+    log::info!("CARTESI_RX_WAIT");
     let expected = loop {
-        input.extend_from_slice(&usb.serial_wait_binary());
+        let chunk = usb.serial_wait_binary();
+        log::info!("CARTESI_RX_CHUNK len={} total={}", chunk.len(), input.len() + chunk.len());
+        input.extend_from_slice(&chunk);
         if input.len() >= LENGTH_BYTES {
             let length = u64::from_le_bytes(input[..LENGTH_BYTES].try_into().unwrap());
             // The USB IPC hook can produce an empty zero-filled response while the
@@ -110,14 +113,19 @@ fn receive_log(usb: &usb_bao1x::UsbHid) -> Vec<u8> {
                 input.clear();
                 continue;
             }
-            break usize::try_from(length).expect("step log is too large for this target");
+            let expected = usize::try_from(length).expect("step log is too large for this target");
+            log::info!("CARTESI_RX_LENGTH expected={}", expected);
+            break expected;
         }
     };
     assert!(expected > 0, "empty step log");
     assert!(expected <= isize::MAX as usize, "step log is too large");
     while input.len() - LENGTH_BYTES < expected {
-        input.extend_from_slice(&usb.serial_wait_binary());
+        let chunk = usb.serial_wait_binary();
+        log::info!("CARTESI_RX_CHUNK len={} total={}", chunk.len(), input.len() + chunk.len());
+        input.extend_from_slice(&chunk);
     }
+    log::info!("CARTESI_RX_COMPLETE bytes={}", expected);
     assert_eq!(input.len() - LENGTH_BYTES, expected, "extra bytes after framed step log");
     input.drain(..LENGTH_BYTES);
     input
