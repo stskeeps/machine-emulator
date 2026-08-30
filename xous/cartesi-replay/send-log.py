@@ -14,8 +14,9 @@ HOOK_SETTLE_SECONDS = 0.5
 TX_CHUNK_BYTES = 64
 TX_CHUNK_DELAY = 0.02
 READY_MESSAGE = b"CARTESI_READY\n"
-RECEIVED_MESSAGE = b"CARTESI_RECEIVED\n"
-JOURNAL_MESSAGE = b"CARTESI_JOURNAL\n"
+CONTROL_MAGIC = b"\xc3\xa5Z<"
+CONTROL_ACK = 1
+CONTROL_JOURNAL = 2
 BOOT_MENU = b"Commands include:"
 
 
@@ -99,6 +100,31 @@ def wait_marker(port: serial.Serial, marker: bytes, timeout: float, verbose: boo
         print(f"received {marker.decode().strip()}", file=sys.stderr, flush=True)
 
 
+def read_control_frame(port: serial.Serial, timeout: float, verbose: bool = False):
+    deadline = time.monotonic() + timeout
+    window = bytearray()
+    while True:
+        if time.monotonic() >= deadline:
+            raise TimeoutError("timed out waiting for binary control frame")
+        chunk = port.read(1)
+        if not chunk:
+            continue
+        window.extend(chunk)
+        if len(window) > len(CONTROL_MAGIC):
+            del window[:-len(CONTROL_MAGIC)]
+        if bytes(window) != CONTROL_MAGIC:
+            continue
+        header = read_exact(port, 5)
+        kind = header[0]
+        length = struct.unpack("<I", header[1:])[0]
+        if length > 4096:
+            window.clear()
+            continue
+        payload = read_exact(port, length)
+        if verbose:
+            print(f"control frame kind={kind} length={length}", file=sys.stderr, flush=True)
+        return kind, payload
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("port", help="USB CDC serial device, for example /dev/ttyACM0")
@@ -142,14 +168,15 @@ def main() -> None:
                     print(f"sent {sent}/{len(frame)} bytes", file=sys.stderr, flush=True)
                 time.sleep(TX_CHUNK_DELAY)
             if args.verbose:
-                print(f"sent {len(frame)} bytes; waiting for CARTESI_RECEIVED", file=sys.stderr, flush=True)
-            wait_marker(port, RECEIVED_MESSAGE, remaining, args.verbose)
+                print("waiting for binary receive ACK", file=sys.stderr, flush=True)
+            kind, payload = read_control_frame(port, remaining, args.verbose)
+            if kind != CONTROL_ACK or payload:
+                raise RuntimeError(f"unexpected control frame kind={kind} length={len(payload)}")
             if args.verbose:
-                print("waiting for CARTESI_JOURNAL", file=sys.stderr, flush=True)
-            wait_marker(port, JOURNAL_MESSAGE, remaining, args.verbose)
-            if args.verbose:
-                print(f"waiting for {JOURNAL_BYTES}-byte journal", file=sys.stderr, flush=True)
-            journal = read_exact(port, JOURNAL_BYTES, args.verbose)
+                print("waiting for binary journal frame", file=sys.stderr, flush=True)
+            kind, journal = read_control_frame(port, remaining, args.verbose)
+            if kind != CONTROL_JOURNAL or len(journal) != JOURNAL_BYTES:
+                raise RuntimeError(f"unexpected journal frame kind={kind} length={len(journal)}")
             if args.verbose:
                 print("received journal", file=sys.stderr, flush=True)
             port.close()

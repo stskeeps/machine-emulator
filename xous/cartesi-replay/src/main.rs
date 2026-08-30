@@ -13,7 +13,11 @@ const READY_MESSAGE: &[u8] = b"CARTESI_READY\n";
 #[cfg(target_os = "xous")]
 const RECEIVED_MESSAGE: &[u8] = b"CARTESI_RECEIVED\n";
 #[cfg(target_os = "xous")]
-const JOURNAL_MESSAGE: &[u8] = b"CARTESI_JOURNAL\n";
+const CONTROL_MAGIC: &[u8] = b"\xc3\xa5Z<";
+#[cfg(target_os = "xous")]
+const CONTROL_ACK: u8 = 1;
+#[cfg(target_os = "xous")]
+const CONTROL_JOURNAL: u8 = 2;
 
 extern "C" {
     fn risc0_replay_steps(
@@ -134,6 +138,15 @@ fn receive_log(usb: &usb_bao1x::UsbHid) -> Vec<u8> {
 }
 
 #[cfg(target_os = "xous")]
+fn send_control(usb: &usb_bao1x::UsbHid, kind: u8, payload: &[u8]) {
+    let mut header = [0u8; 9];
+    header[..4].copy_from_slice(CONTROL_MAGIC);
+    header[4] = kind;
+    header[5..9].copy_from_slice(&(payload.len() as u32).to_le_bytes());
+    send_all(usb, &header);
+    send_all(usb, payload);
+}
+
 fn send_all(usb: &usb_bao1x::UsbHid, mut data: &[u8]) {
     while !data.is_empty() {
         match usb.serial_send(data) {
@@ -181,12 +194,11 @@ fn main() -> ! {
     }
     send_all(&usb, READY_MESSAGE);
     let log = receive_log(&usb);
-    send_all(&usb, RECEIVED_MESSAGE);
+    send_control(&usb, CONTROL_ACK, &[]);
     log::info!("CARTESI_REPLAY_START bytes={}", log.len());
     let journal = replay(log);
     log::info!("CARTESI_REPLAY_DONE");
-    send_all(&usb, JOURNAL_MESSAGE);
-    send_all(&usb, &journal);
+    send_control(&usb, CONTROL_JOURNAL, &journal);
     usb.serial_clear_input_hooks();
     xous::terminate_process(0)
 }
