@@ -12,6 +12,8 @@ const JOURNAL_BYTES: usize = 96;
 const READY_MESSAGE: &[u8] = b"CARTESI_READY\n";
 #[cfg(target_os = "xous")]
 const RECEIVED_MESSAGE: &[u8] = b"CARTESI_RECEIVED\n";
+#[cfg(target_os = "xous")]
+const JOURNAL_MESSAGE: &[u8] = b"CARTESI_JOURNAL\n";
 
 extern "C" {
     fn risc0_replay_steps(
@@ -181,6 +183,7 @@ fn main() -> ! {
     let log = receive_log(&usb);
     send_all(&usb, RECEIVED_MESSAGE);
     let journal = replay(log);
+    send_all(&usb, JOURNAL_MESSAGE);
     send_all(&usb, &journal);
     usb.serial_clear_input_hooks();
     xous::terminate_process(0)

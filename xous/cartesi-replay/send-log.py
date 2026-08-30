@@ -15,6 +15,7 @@ TX_CHUNK_BYTES = 64
 TX_CHUNK_DELAY = 0.02
 READY_MESSAGE = b"CARTESI_READY\n"
 RECEIVED_MESSAGE = b"CARTESI_RECEIVED\n"
+JOURNAL_MESSAGE = b"CARTESI_JOURNAL\n"
 BOOT_MENU = b"Commands include:"
 
 
@@ -143,6 +144,9 @@ def main() -> None:
             if args.verbose:
                 print(f"sent {len(frame)} bytes; waiting for CARTESI_RECEIVED", file=sys.stderr, flush=True)
             wait_marker(port, RECEIVED_MESSAGE, remaining, args.verbose)
+            if args.verbose:
+                print("waiting for CARTESI_JOURNAL", file=sys.stderr, flush=True)
+            wait_marker(port, JOURNAL_MESSAGE, remaining, args.verbose)
             if args.verbose:
                 print(f"waiting for {JOURNAL_BYTES}-byte journal", file=sys.stderr, flush=True)
             journal = read_exact(port, JOURNAL_BYTES, args.verbose)
