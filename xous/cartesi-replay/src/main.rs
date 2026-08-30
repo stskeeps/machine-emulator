@@ -152,6 +152,8 @@ fn replay(mut log: Vec<u8>) -> [u8; JOURNAL_BYTES] {
 fn main() -> ! {
     log_server::init_wait().expect("could not connect to the Xous log server");
     let usb = usb_bao1x::UsbHid::new();
+    // Let usb-bao1x finish registering with xous-log before installing the mirror hook.
+    std::thread::sleep(Duration::from_millis(500));
     usb.serial_console_input_injection();
     send_all(&usb, READY_MESSAGE);
     let journal = replay(receive_log(&usb));
