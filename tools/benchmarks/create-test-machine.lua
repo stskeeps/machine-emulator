@@ -5,11 +5,13 @@ local cartesi = require("cartesi")
 
 local images_dir = assert(arg[1], "usage: create-test-machine.lua <tests-images-dir> <output-dir>")
 local output_dir = assert(arg[2], "usage: create-test-machine.lua <tests-images-dir> <output-dir>")
+local ram_mib = tonumber(arg[3]) or 64
+assert(ram_mib >= 1 and ram_mib % 1 == 0, "RAM size must be a positive integer MiB")
 images_dir = images_dir:gsub("/$", "")
 
 local config = {
     ram = {
-        length = 0x4000000,
+        length = ram_mib * 1024 * 1024,
         backing_store = {
             data_filename = images_dir .. "/linux.bin",
         },
@@ -29,4 +31,4 @@ local config = {
 local machine = cartesi.machine(config)
 machine:store(output_dir, cartesi.SHARING_ALL)
 machine:destroy()
-print("Created initial-state test machine at " .. output_dir)
+print(string.format("Created %d MiB initial-state test machine at %s", ram_mib, output_dir))

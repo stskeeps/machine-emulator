@@ -15,8 +15,10 @@ rootfs, and entrypoint configuration as `tests/lua/create-machines.lua`:
 ```sh
 LUA_CPATH="$PWD/src/?.so;;" lua5.4 \
   tools/benchmarks/create-test-machine.lua \
-  tests/build/images tests/build/machine/first-cycle
+  tests/build/images tests/build/machine/first-cycle 64
 ```
+
+The last argument sets RAM size in MiB; use `512` to generate a 512 MiB fixture.
 
 Then run the benchmark:
 
