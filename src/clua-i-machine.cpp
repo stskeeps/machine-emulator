@@ -503,7 +503,8 @@ static const nlohmann::json &clua_get_machine_schema_dict(lua_State *L) try {
                 {"yielded_softly", CM_BREAK_REASON_YIELDED_SOFTLY},
                 {"reached_target_mcycle", CM_BREAK_REASON_REACHED_TARGET_MCYCLE},
                 {"console_output", CM_BREAK_REASON_CONSOLE_OUTPUT}, {"console_input", CM_BREAK_REASON_CONSOLE_INPUT},
-                {"mcycle_overflow", CM_BREAK_REASON_MCYCLE_OVERFLOW}}},
+                {"mcycle_overflow", CM_BREAK_REASON_MCYCLE_OVERFLOW}, {"wfi", CM_BREAK_REASON_WFI},
+                {"sret", CM_BREAK_REASON_SRET}}},
         {"ArrayIndex", "ArrayIndex"},
         {"Base64Array",
             {

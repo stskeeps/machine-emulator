@@ -766,6 +766,22 @@ do_test("mcycle value should be 1000 after execution", function(machine)
     assert(machine:read_reg("mcycle") == 1000)
 end)
 
+do_test("WFI should return its own break reason and resume after the instruction", function(machine)
+    local ram_start = 0x80000000
+    local WFI_INSN = 0x10500073
+    local NOP_INSN = 0x00000013
+    machine:write_memory(ram_start, string.pack("<I4I4", WFI_INSN, NOP_INSN))
+    machine:write_reg("pc", ram_start)
+    machine:write_reg("mcycle", 0)
+    machine:write_reg("iflags_H", 0)
+    machine:write_reg("iflags_Y", 0)
+
+    -- With no break_on_wfi runtime option, WFI follows its normal behavior.
+    assert(machine:run(2) == cartesi.BREAK_REASON_REACHED_TARGET_MCYCLE)
+    assert(machine:read_reg("pc") == ram_start + 8, "execution should resume after WFI")
+    assert(machine:read_reg("mcycle") == 2)
+end)
+
 do_test("machine should overflow exactly at imcyclemax", function(machine)
     machine:write_reg("mcycle", 0)
     machine:write_reg("imcyclemax", 5)

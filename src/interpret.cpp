@@ -2781,6 +2781,11 @@ static FORCE_INLINE execute_status execute_SRET(const STATE_ACCESS a, uint64_t &
         set_prv(a, spp);
     }
     pc = a.read_sepc();
+    if constexpr (requires { a.break_on_sret(); }) {
+        if (a.break_on_sret()) {
+            return execute_status::success_and_sret;
+        }
+    }
     return execute_status::success_and_serve_interrupts;
 }
 
@@ -2821,7 +2826,6 @@ template <typename STATE_ACCESS>
 static FORCE_INLINE execute_status execute_WFI(const STATE_ACCESS a, uint64_t &pc, uint64_t &mcycle,
     uint64_t mcycle_end, uint32_t insn) {
     [[maybe_unused]] auto note = dump_insn(a, pc, insn, "wfi");
-    auto status = execute_status::success;
     // Check privileges and do nothing else
     auto prv = a.read_iprv();
     const uint64_t mstatus = a.read_mstatus();
@@ -2829,7 +2833,18 @@ static FORCE_INLINE execute_status execute_WFI(const STATE_ACCESS a, uint64_t &p
     if (prv == PRV_U || (prv < PRV_M && (mstatus & MSTATUS_TW_MASK))) [[unlikely]] {
         return raise_illegal_insn_exception(a, pc, insn);
     }
-    // We wait for interrupts until the next timer interrupt, but never past mcycle_end.
+    if constexpr (requires { a.break_on_wfi(); }) {
+        if (a.break_on_wfi()) {
+            // WFI is permitted to behave as a NOP. Advance past it and return control
+            // to the caller so it can handle wakeup sources and explicitly resume.
+            static_cast<void>(mcycle);
+            static_cast<void>(mcycle_end);
+            return advance_to_next_insn(a, pc, execute_status::success_and_wfi);
+        }
+    }
+
+    auto status = execute_status::success;
+    // Otherwise wait for interrupts until the next timer interrupt, but never past mcycle_end.
     const uint64_t mcycle_max = std::min(rtc_time_to_cycle(a.read_clint_mtimecmp()), mcycle_end);
     if constexpr (is_an_i_interactive_state_access_v<STATE_ACCESS>) {
         if (mcycle_max > mcycle) {
@@ -6302,7 +6317,8 @@ static NO_INLINE execute_status interpret_loop(const STATE_ACCESS a, uint64_t mc
                 if (status > execute_status::success) [[unlikely]] {
                     // We must invalidate the fetch cache whenever privilege mode changes,
                     // either due to a raised exception (execute_status::failure) or
-                    // due to MRET/SRET instructions (execute_status::success_and_serve_interrupts)
+                    // due to MRET instructions (execute_status::success_and_serve_interrupts) or SRET,
+                    // which returns control to the caller.
                     // As a simplification (and optimization), the next line will also invalidate in more cases,
                     // but this it's fine.
                     fetch_vaddr_page = ensure_fetch_cache_miss(pc);
@@ -6320,6 +6336,8 @@ static NO_INLINE execute_status interpret_loop(const STATE_ACCESS a, uint64_t mc
                         // - execute_status::success_and_halt
                         // - execute_status::success_and_console_output
                         // - execute_status::success_and_console_input
+                        // - execute_status::success_and_wfi
+                        // - execute_status::success_and_sret
 
                         // Commit machine state
                         a.write_pc(pc);
@@ -6405,6 +6423,12 @@ interpreter_break_reason interpret(const STATE_ACCESS a, uint64_t mcycle_end) {
     }
     if (status == execute_status::success_and_console_input) {
         return interpreter_break_reason::console_input;
+    }
+    if (status == execute_status::success_and_wfi) {
+        return interpreter_break_reason::wfi;
+    }
+    if (status == execute_status::success_and_sret) {
+        return interpreter_break_reason::sret;
     }
     // Else, reached mcycle_end
     assert(a.read_mcycle() == effective_mcycle_end); // LCOV_EXCL_LINE

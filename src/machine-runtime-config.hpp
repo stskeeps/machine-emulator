@@ -84,7 +84,9 @@ struct machine_runtime_config {
     concurrency_runtime_config concurrency{};
     bool skip_version_check{};
     bool soft_yield{};
-    bool no_reserve{}; ///< Do not reserve swap memory when mapping flash drives
+    bool no_reserve{};    ///< Do not reserve swap memory when mapping flash drives
+    bool break_on_sret{}; ///< Return from machine execution after a valid SRET instruction
+    bool break_on_wfi{};  ///< Return from machine execution after a WFI instruction
 };
 
 } // namespace cartesi

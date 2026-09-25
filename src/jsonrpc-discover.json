@@ -1551,6 +1551,12 @@
           },
           "no_reserve": {
             "type": "boolean"
+          },
+          "break_on_sret": {
+            "type": "boolean"
+          },
+          "break_on_wfi": {
+            "type": "boolean"
           }
         }
       },
@@ -2324,7 +2330,9 @@
           "reached_target_mcycle",
           "console_output",
           "console_input",
-          "mcycle_overflow"
+          "mcycle_overflow",
+          "wfi",
+          "sret"
         ]
       },
       "UarchInterpreterBreakReason": {

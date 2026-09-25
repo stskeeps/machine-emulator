@@ -148,6 +148,8 @@ typedef enum cm_break_reason {
     CM_BREAK_REASON_CONSOLE_OUTPUT,
     CM_BREAK_REASON_CONSOLE_INPUT,
     CM_BREAK_REASON_MCYCLE_OVERFLOW,
+    CM_BREAK_REASON_WFI,
+    CM_BREAK_REASON_SRET, ///< The machine executed a valid SRET instruction.
 } cm_break_reason;
 
 /// \brief Reasons for the machine to break from call to cm_run_uarch.
@@ -814,13 +816,14 @@ CM_API cm_error cm_write_console_input(cm_machine *m, const uint8_t *data, uint6
 // Running
 // ------------------------------------
 
-/// \brief Runs the machine until CM_REG_MCYCLE reaches mcycle_end, the machine yields, or halts.
+/// \brief Runs the machine until CM_REG_MCYCLE reaches mcycle_end, the machine yields, halts, or executes WFI.
 /// \param m Pointer to a non-empty machine object (holds a machine instance).
 /// \param mcycle_end End cycle value.
 /// \param break_reason Receives reason for returning (can be NULL). Set to CM_BREAK_REASON_FAILED on failure.
 /// \returns 0 for success, non zero code for error.
-/// \details You may want to receive cmio requests depending on the run break reason. The break reason precedence is
-/// cycle overflow, halt, manual yield, then reaching the target mcycle.
+/// \details WFI instructions are treated as no-ops and cause the call to return after advancing past the instruction.
+/// The caller can resume execution with another call to cm_run(). The break reason precedence is cycle overflow,
+/// halt, manual yield, WFI, then reaching the target mcycle.
 CM_API cm_error cm_run(cm_machine *m, uint64_t mcycle_end, cm_break_reason *break_reason);
 
 /// \brief Collects state root hashes after every 2^\p log2_mcycle_period machine cycles

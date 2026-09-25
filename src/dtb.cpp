@@ -58,6 +58,11 @@ void dtb_init(const machine_config &c, unsigned char *dtb_start, uint64_t dtb_le
     constexpr uint32_t X_HOST = 13;
     constexpr uint32_t BOOTARGS_MAX_LEN = 4096;
 
+    // VirtIO devices and NVRAM UIO devices share the PLIC's 1-based source IDs.
+    if (c.virtio.size() + c.nvram.size() > PLIC_MAX_IRQ) {
+        throw std::runtime_error{"too many VirtIO devices and NVRAMs for the PLIC"};
+    }
+
     // Check if bootargs length is not too large
     if (c.dtb.bootargs.length() > BOOTARGS_MAX_LEN) {
         throw std::runtime_error{"DTB bootargs is is above maximum length of 4096"};
@@ -194,10 +199,13 @@ void dtb_init(const machine_config &c, unsigned char *dtb_start, uint64_t dtb_le
         }
 
         // nvrams
-        for (const auto &n : c.nvram) {
+        for (size_t nvram_idx = 0; nvram_idx < c.nvram.size(); ++nvram_idx) {
+            const auto &n = c.nvram[nvram_idx];
+            const uint32_t plic_irq_id = static_cast<uint32_t>(c.virtio.size() + nvram_idx + 1);
             fdt.begin_node_num("uio", n.start);
             fdt.prop_string("compatible", "generic-uio");
             fdt.prop_u64_list<2>("reg", {n.start, n.length});
+            fdt.prop_u32_list<2>("interrupts-extended", {PLIC_PHANDLE, plic_irq_id});
             fdt.end_node();
         }
 

@@ -36,6 +36,8 @@ enum execute_status : uint64_t {
     success_and_halt,  // Instruction execution succeed, the interpreter must stop because the machine cannot continue
     success_and_console_output, // Instruction execution succeed, the interpreter must stop to flush the console output
     success_and_console_input,  // Instruction execution succeed, the interpreter must stop to refill the console input
+    success_and_wfi,            // Instruction execution succeed, the interpreter must stop after executing WFI
+    success_and_sret,           // Instruction execution succeed, the interpreter must stop after executing SRET
 };
 
 /// \brief Reasons for interpreter loop interruption
@@ -49,6 +51,8 @@ enum class interpreter_break_reason {
     console_output,
     console_input,
     mcycle_overflow,
+    wfi,
+    sret,
 };
 
 /// \brief Tries to run the interpreter until mcycle hits a target

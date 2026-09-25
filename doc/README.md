@@ -1297,6 +1297,12 @@ need to flush a cache before snapshotting. This makes NVRAMs faster than
 flash drives for cases where the guest only needs raw access to a region
 of bytes.
 
+Each NVRAM UIO node is assigned a PLIC interrupt source, after the sources
+assigned to configured virtio devices. The assignment wires the interrupt
+into Linux but does not cause NVRAM reads or writes to raise it; the host or
+device model must assert the pending PLIC source when it has an event to
+report. The PLIC supports source IDs 1–31, shared by virtio and NVRAM devices.
+
 Because UIO devices do not support ordinary `read()` or `write()`
 against the device file, the machine guest utilities include the
 `readmmap` and `writemmap` tools to read and write NVRAMs. They resolve
@@ -3832,6 +3838,15 @@ has reached a state past which it cannot continue on its own.
 `BREAK_REASON_MCYCLE_OVERFLOW` likewise signals a fixed point when
 `mcycle` reaches `imcyclemax`. Overflow takes precedence over halt,
 manual yield, and reaching the requested target.
+Breaking on WFI or SRET is opt-in through the machine runtime configuration.
+For example, construct a machine with
+`cartesi.machine(config, { break_on_wfi = true, break_on_sret = true })`.
+With `break_on_wfi` enabled, WFI is treated as a no-op and `machine:run()`
+returns with `BREAK_REASON_WFI` immediately after it. With `break_on_sret`
+enabled, a valid SRET similarly returns with `BREAK_REASON_SRET` and the PC at
+the SRET target. In either case, the caller can handle external events before
+resuming with another `machine:run()` call. When these options are disabled,
+WFI and SRET retain their normal behavior.
 
 At any point, the `machine:get_initial_config()` method can be used to
 obtain the configuration that was used to create a Cartesi Machine

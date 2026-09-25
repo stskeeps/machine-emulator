@@ -15,6 +15,7 @@ local RAM_START = cartesi.AR_RAM_START
 local MSTATUS_SIE = 1 << 1
 local MSTATUS_MIE = 1 << 3
 local MSTATUS_MPP_S = 1 << 11
+local MSTATUS_SPP_S = 1 << 8
 local MSTATUS_FS_DIRTY = 3 << 13
 local MIP_SSIP = 1 << 1
 local MIP_MTIP = 1 << 7
@@ -294,20 +295,10 @@ describe("fuzzer bugs", function()
         expect.equal(br, cartesi.BREAK_REASON_REACHED_TARGET_MCYCLE)
     end)
 
-    -- Bug 5: iunrep read from mutable shadow state at runtime
-    --
-    -- poll_external_interrupts reads iunrep from the shadow state register on
-    -- every call. If iunrep is set to non-zero (e.g., via write_reg or a
-    -- corrupted shadow state), the machine enters unreproducible mode. WFI then
-    -- advances mcycle up to rtc_time_to_cycle(clint_mtimecmp), which can exceed
-    -- mcycle_end, triggering an assertion failure.
-    --
-    -- Fix: poll_external_interrupts uses the config value (set at construction)
-    -- instead of the shadow register. WFI clamps mcycle_max to mcycle_end.
-    it("should not overshoot mcycle_end when iunrep is set in shadow state", function()
+    it("should break at WFI when break_on_wfi is enabled", function()
         -- WFI instruction: 0x10500073
         local WFI_INSN = string.pack("<I4", 0x10500073)
-        local machine <close> = cartesi.machine({ ram = { length = 1 << 20 } })
+        local machine <close> = cartesi.machine({ ram = { length = 1 << 20 } }, { break_on_wfi = true })
         machine:write_memory(RAM_START, WFI_INSN .. string.rep(NOP, 16))
         machine:write_reg("pc", RAM_START)
         -- Set iunrep to non-zero via write_reg (corrupts shadow state)
@@ -317,11 +308,52 @@ describe("fuzzer bugs", function()
         -- Enable M-mode interrupts so WFI doesn't just trap
         machine:write_reg("mstatus", MSTATUS_MIE | MSTATUS_FS_DIRTY)
         machine:write_reg("mie", MIP_MTIP)
-        -- Before the fix, this triggers:
-        --   assert(a.read_mcycle() == mcycle_end)
-        -- because mcycle overshoots mcycle_end via poll_external_interrupts.
+        -- WFI should return control after exactly one instruction cycle.
         local br = machine:run(4)
-        expect.equal(br, cartesi.BREAK_REASON_REACHED_TARGET_MCYCLE)
+        expect.equal(br, cartesi.BREAK_REASON_WFI)
+        expect.equal(machine:read_reg("mcycle"), 1)
+    end)
+
+    it("should not break at WFI by default", function()
+        local WFI_INSN = string.pack("<I4", 0x10500073)
+        local machine <close> = cartesi.machine({ ram = { length = 1 << 20 } })
+        machine:write_memory(RAM_START, WFI_INSN .. string.rep(NOP, 16))
+        machine:write_reg("pc", RAM_START)
+        expect.equal(machine:run(4), cartesi.BREAK_REASON_REACHED_TARGET_MCYCLE)
+        expect.equal(machine:read_reg("mcycle"), 4)
+    end)
+
+    it("should break immediately after a valid SRET when break_on_sret is enabled", function()
+        -- SRET instruction: 0x10200073
+        local SRET_INSN = string.pack("<I4", 0x10200073)
+        local machine <close> = cartesi.machine({ ram = { length = 1 << 20 } }, { break_on_sret = true })
+        machine:write_memory(RAM_START, SRET_INSN .. string.rep(NOP, 16))
+        machine:write_reg("pc", RAM_START)
+        machine:write_reg("sepc", RAM_START + 4)
+        machine:write_reg("iprv", 1) -- S-mode
+        machine:write_reg("mstatus", MSTATUS_SPP_S | MSTATUS_FS_DIRTY)
+
+        local br = machine:run(4)
+        expect.equal(br, cartesi.BREAK_REASON_SRET)
+        expect.equal(machine:read_reg("mcycle"), 1)
+        expect.equal(machine:read_reg("pc"), RAM_START + 4)
+        expect.equal(machine:read_reg("iprv"), 1)
+        -- Resume at sepc; SRET did not consume or skip the following instruction.
+        expect.equal(machine:run(2), cartesi.BREAK_REASON_REACHED_TARGET_MCYCLE)
+        expect.equal(machine:read_reg("mcycle"), 2)
+    end)
+
+    it("should handle SRET normally by default", function()
+        local SRET_INSN = string.pack("<I4", 0x10200073)
+        local machine <close> = cartesi.machine({ ram = { length = 1 << 20 } })
+        machine:write_memory(RAM_START, SRET_INSN .. string.rep(NOP, 16))
+        machine:write_reg("pc", RAM_START)
+        machine:write_reg("sepc", RAM_START + 4)
+        machine:write_reg("iprv", 1) -- S-mode
+        machine:write_reg("mstatus", MSTATUS_SPP_S | MSTATUS_FS_DIRTY)
+        expect.equal(machine:run(2), cartesi.BREAK_REASON_REACHED_TARGET_MCYCLE)
+        expect.equal(machine:read_reg("mcycle"), 2)
+        expect.equal(machine:read_reg("pc"), RAM_START + 8)
     end)
 end)
 

@@ -78,6 +78,14 @@ public:
         ;
     }
 
+    bool break_on_sret() const {
+        return m_m.get_runtime_config().break_on_sret;
+    }
+
+    bool break_on_wfi() const {
+        return m_m.get_runtime_config().break_on_wfi;
+    }
+
 private:
     // -----
     // i_state_access interface implementation

@@ -13,11 +13,20 @@ local initial_mcycle = machine:read_reg("mcycle")
 assert(target_mcycle >= initial_mcycle, "target mcycle is before the stored machine's current mcycle")
 print(string.format("Advancing machine from mcycle %d to %d", initial_mcycle, target_mcycle))
 
-local break_reason = machine:run(target_mcycle)
+local break_reason
+repeat
+    break_reason = machine:run(target_mcycle)
+until break_reason ~= cartesi.BREAK_REASON_WFI or machine:read_reg("mcycle") >= target_mcycle
 local actual_mcycle = machine:read_reg("mcycle")
-assert(actual_mcycle >= target_mcycle,
-    string.format("machine stopped at mcycle %d before target %d (break reason %d)",
-        actual_mcycle, target_mcycle, break_reason))
+assert(
+    actual_mcycle >= target_mcycle,
+    string.format(
+        "machine stopped at mcycle %d before target %d (break reason %d)",
+        actual_mcycle,
+        target_mcycle,
+        break_reason
+    )
+)
 
 machine:store(output_dir, cartesi.SHARING_ALL)
 machine:destroy()

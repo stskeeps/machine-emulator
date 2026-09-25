@@ -32,19 +32,10 @@ _start:
 	la t0, trap;
 	csrw mtvec, t0;
 
-        // Run a few WFI instructions to catch a possible integer overflow in
-        // cartesi-machine's mcycle
-	wfi
-	wfi
-	wfi
-	wfi
-	wfi
-	wfi
-	wfi
-	wfi
-	wfi
-	wfi
-	exit_imm(0);
+        // Keep executing until the requested cycle limit so this fixture can
+        // test mcycle overflow independently of WFI's early-break behavior.
+loop:
+	j loop
 
 // catch exception and exit
 trap:
@@ -61,4 +52,3 @@ exit:
 	li t0, AR_HTIF_START_DEF
 	sd gp, 0(t0);
 	j 1b; // Should not be necessary
-

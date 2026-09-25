@@ -602,6 +602,10 @@ static std::string interpreter_break_reason_to_name(interpreter_break_reason rea
             return "console_input";
         case R::mcycle_overflow:
             return "mcycle_overflow";
+        case R::wfi:
+            return "wfi";
+        case R::sret:
+            return "sret";
     }
     throw std::domain_error{"invalid interpreter break reason"};
 }
@@ -612,7 +616,7 @@ static interpreter_break_reason interpreter_break_reason_from_name(const std::st
         {"yielded_manually", ibr::yielded_manually}, {"yielded_automatically", ibr::yielded_automatically},
         {"yielded_softly", ibr::yielded_softly}, {"reached_target_mcycle", ibr::reached_target_mcycle},
         {"console_output", ibr::console_output}, {"console_input", ibr::console_input},
-        {"mcycle_overflow", ibr::mcycle_overflow}};
+        {"mcycle_overflow", ibr::mcycle_overflow}, {"wfi", ibr::wfi}, {"sret", ibr::sret}};
     auto got = g_ibr_name.find(name);
     if (got == g_ibr_name.end()) {
         throw std::domain_error{"invalid interpreter break reason"};
@@ -1136,6 +1140,8 @@ void ju_get_opt_field(const nlohmann::json &j, const K &key, machine_runtime_con
     ju_get_opt_field(j[key], "skip_version_check"s, value.skip_version_check, path + to_string(key) + "/");
     ju_get_opt_field(j[key], "soft_yield"s, value.soft_yield, path + to_string(key) + "/");
     ju_get_opt_field(j[key], "no_reserve"s, value.no_reserve, path + to_string(key) + "/");
+    ju_get_opt_field(j[key], "break_on_sret"s, value.break_on_sret, path + to_string(key) + "/");
+    ju_get_opt_field(j[key], "break_on_wfi"s, value.break_on_wfi, path + to_string(key) + "/");
 }
 
 template void ju_get_opt_field<uint64_t>(const nlohmann::json &j, const uint64_t &key, machine_runtime_config &value,
@@ -2575,6 +2581,8 @@ void to_json(nlohmann::json &j, const machine_runtime_config &runtime) {
         {"skip_version_check", runtime.skip_version_check},
         {"soft_yield", runtime.soft_yield},
         {"no_reserve", runtime.no_reserve},
+        {"break_on_sret", runtime.break_on_sret},
+        {"break_on_wfi", runtime.break_on_wfi},
     };
 }
 
