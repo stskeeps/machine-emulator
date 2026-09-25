@@ -20,6 +20,19 @@ LUA_CPATH="$PWD/src/?.so;;" lua5.4 \
 
 The last argument sets RAM size in MiB; use `512` to generate a 512 MiB fixture.
 
+To prepare a snapshot at a later mcycle (for example, 2,000,000), advance and
+store a copy, then point the benchmark at that copy:
+
+```sh
+LUA_CPATH="$PWD/src/?.so;;" lua5.4 \
+  tools/benchmarks/snapshot-at-mcycle.lua \
+  tests/build/machine/first-cycle-512mib \
+  tests/build/machine/at-mcycle-2000000 2000000
+
+tools/benchmarks/build/cartesi-machine-load-first-cycle \
+  tests/build/machine/at-mcycle-2000000 10 0 none
+```
+
 Then run the benchmark:
 
 ```sh
