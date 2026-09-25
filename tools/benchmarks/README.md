@@ -52,3 +52,18 @@ warmups can be specified to exclude initial iterations.
 corresponding backing-store sharing mode. Reusing the same directory makes
 filesystem cache warming part of repeated measurements; use `warmups=0` and
 inspect per-iteration rows when comparing first-load behavior.
+
+## Trace SRET and WFI while showing the guest console
+
+Load a stored machine with `trace-sret-wfi.lua` to stream guest console output
+to stdout and print each valid SRET/WFI break (with mcycle, PC, and privilege)
+to stderr. Both break options are enabled only in the runner's runtime config.
+An optional second argument bounds execution by mcycle; otherwise it runs to a
+fixed point.
+
+```sh
+LUA_PATH="$PWD/src/?.lua;$PWD/tests/lua/?.lua;;" \
+LUA_CPATH="$PWD/src/?.so;;" \
+lua5.4 tools/benchmarks/trace-sret-wfi.lua \
+  tests/build/machine/at-mcycle-2000000 10000000
+```

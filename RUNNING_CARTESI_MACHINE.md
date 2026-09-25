@@ -76,6 +76,25 @@ snapshot run, or load it in a Machine Emulator program. Keep each output path
 new: storing a machine does not overwrite an existing stored-machine
 directory.
 
+## Run with visible console and SRET/WFI tracing
+
+The trace runner loads a stored machine without changing the stored source,
+shows guest console output on stdout, and writes one trace line to stderr each
+time the guest executes a valid SRET or WFI instruction. Pass an optional
+`max-mcycle` to bound the run; otherwise it runs until halt, manual yield, or
+machine-cycle overflow.
+
+```sh
+LUA_PATH="$PWD/src/?.lua;$PWD/tests/lua/?.lua;;" \
+LUA_CPATH="$PWD/src/?.so;;" \
+lua5.4 tools/benchmarks/trace-sret-wfi.lua \
+  tests/build/machine/cartesi-at-mcycle-2000000
+```
+
+SRET/WFI breaks are enabled for this runner only. The guest console remains on
+stdout; `TRACE SRET` and `TRACE WFI` records go to stderr so they do not corrupt
+the guest's console stream.
+
 ## NVRAM configuration and access
 
 NVRAM is an optional raw-memory region, configured as an entry in the machine's
