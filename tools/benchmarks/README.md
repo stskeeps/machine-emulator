@@ -1,16 +1,28 @@
 # Machine load to first cycle benchmark
 
-Build the benchmark from the repository root:
+Fetch the Linux kernel and root filesystem used by the emulator tests, then build
+the benchmark and Lua binding from the repository root:
 
 ```sh
+make -C tests images
 make -C tools/benchmarks
+make -C src cartesi.so
 ```
 
-Run it against a stored machine directory:
+Create an initial-state stored machine using the same 64 MiB RAM, kernel,
+rootfs, and entrypoint configuration as `tests/lua/create-machines.lua`:
+
+```sh
+LUA_CPATH="$PWD/src/?.so;;" lua5.4 \
+  tools/benchmarks/create-test-machine.lua \
+  tests/build/images tests/build/machine/first-cycle
+```
+
+Then run the benchmark:
 
 ```sh
 tools/benchmarks/build/cartesi-machine-load-first-cycle \
-  /path/to/stored-machine [iterations=10] [warmups=0] [sharing=none|config|all]
+  tests/build/machine/first-cycle 10 0 none
 ```
 
 Each measured iteration loads the stored machine, reads its initial `mcycle`,
